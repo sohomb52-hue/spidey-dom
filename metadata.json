@@ -1,0 +1,6 @@
+{
+  "name": "Spider-Verse: Fact Attack",
+  "description": "The definitive web-slinger multiverse trivia and comic lore compendium with interactive sound effects, multiple game modes, and authentic Marvel canon.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
