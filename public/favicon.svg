@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Red Mask Head Base with Ink Border -->
+  <path d="M32 4 C16 4 6 18 6 36 C6 48 18 60 32 60 C46 60 58 48 58 36 C58 18 48 4 32 4 Z" fill="#dc2626" stroke="#1b1b20" stroke-width="3.5" stroke-linejoin="round"/>
+  
+  <!-- Subtle Web Lattice on Mask -->
+  <!-- Vertical Web Lines -->
+  <line x1="32" y1="4" x2="32" y2="60" stroke="#1b1b20" stroke-width="1.8"/>
+  <path d="M32 4 Q20 30 32 60" stroke="#1b1b20" stroke-width="1.2" fill="none"/>
+  <path d="M32 4 Q44 30 32 60" stroke="#1b1b20" stroke-width="1.2" fill="none"/>
+  
+  <!-- Horizontal Web Arcs -->
+  <path d="M12 22 Q32 28 52 22" stroke="#1b1b20" stroke-width="1.2" fill="none"/>
+  <path d="M8 34 Q32 42 56 34" stroke="#1b1b20" stroke-width="1.2" fill="none"/>
+  <path d="M12 46 Q32 54 52 46" stroke="#1b1b20" stroke-width="1.2" fill="none"/>
+  
+  <!-- Left Spidey Comic Eye -->
+  <path d="M14 26 C14 26 22 28 27 38 C23 39 16 36 14 26 Z" fill="#ffffff" stroke="#1b1b20" stroke-width="2.8" stroke-linejoin="round"/>
+  <!-- Right Spidey Comic Eye -->
+  <path d="M50 26 C50 26 42 28 37 38 C41 39 48 36 50 26 Z" fill="#ffffff" stroke="#1b1b20" stroke-width="2.8" stroke-linejoin="round"/>
+</svg>

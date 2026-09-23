@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { GameMode, BadgeItem, WebPageId } from './types';
 import {
   tfQuestions,
@@ -16,6 +16,9 @@ import {
 import { playSound, setSfxMuted } from './utils/audio';
 
 import { ComicHeader } from './components/ComicHeader';
+import { PersistentNavBar } from './components/PersistentNavBar';
+import { AboutModal } from './components/AboutModal';
+import { ContactModal } from './components/ContactModal';
 import { ComicHUD } from './components/ComicHUD';
 import { HeroCover } from './components/HeroCover';
 import { ModeNavigation } from './components/ModeNavigation';
@@ -29,6 +32,8 @@ import { ComicCanonMode } from './components/modes/ComicCanonMode';
 import { BadgesVaultMode } from './components/modes/BadgesVaultMode';
 import { ProfileMode } from './components/modes/ProfileMode';
 import { ArcadePage } from './components/pages/ArcadePage';
+import { NotFoundComicPage } from './components/pages/NotFoundComicPage';
+import { ComicFeedbackToast, ComicToast } from './components/common/ComicFeedbackToast';
 import { WebThrowerGame } from './components/games/WebThrowerGame';
 import { SpiderIdGame } from './components/games/SpiderIdGame';
 import { ComicTiltCard } from './components/ComicTiltCard';
@@ -39,14 +44,66 @@ import { CinematicIntro } from './components/CinematicIntro';
 import { ComicStartTransition } from './components/ComicStartTransition';
 import { IssueCompleteModal } from './components/IssueCompleteModal';
 import { ComicEnvironment25D } from './components/ComicEnvironment25D';
+import { CompactCreatorFooter } from './components/CompactCreatorFooter';
+import { useSpiderAuth } from './context/AuthContext';
+import { SpiderAuthPage } from './components/auth/SpiderAuthPage';
+import { SpiderGuestPromptModal } from './components/auth/SpiderGuestPromptModal';
+import { SpiderLoadingWeb } from './components/auth/SpiderLoadingWeb';
+
+const pageMeta: Record<WebPageId, { title: string; desc: string }> = {
+  cover: {
+    title: 'Spider-Verse: Fact Attack | Multiverse Trivia Comic',
+    desc: 'Spider-Verse: Fact Attack is an interactive Spider-Man trivia game where you test your knowledge, discover random facts and unlock comic-book challenges.'
+  },
+  auth: {
+    title: 'Spider-Verse: Multiverse Hero Check-In & Identity',
+    desc: 'Enter the Spider-Verse with your secret identity to save score, streak, XP, and comic discoveries to Cloud Firestore.'
+  },
+  arcade: {
+    title: 'Spider-Verse: Arcade & Challenges — 6 Playable Mini-Games',
+    desc: 'Play 6 interactive Spider-Man mini-games: Web Thrower 3D, Identify Spiders, Fact Attack, Speed Reflexes, and more.'
+  },
+  web_thrower: {
+    title: 'Spider-Verse: 3D Web Thrower Arena | Rooftop Defense',
+    desc: 'Target and web-sling NYC rooftop villains in full 3D interactive comic action.'
+  },
+  spider_id: {
+    title: 'Spider-Verse: Identify The Hero | Multiverse Variants',
+    desc: 'Test your Spider-Sense by matching multiverse heroes from Earth-616 to Earth-928.'
+  },
+  trivia: {
+    title: 'Spider-Verse: Challenges & Trivia | Multiverse Canon',
+    desc: 'Face authentic comic trivia challenges, quote detectives, and rapid-fire Spider-Sense speed tests.'
+  },
+  canon: {
+    title: 'Spider-Verse: Comic Canon Archives | Marvel History',
+    desc: 'Explore the complete verified comic history from Amazing Fantasy #15 through modern multiverse crossover events.'
+  },
+  vault: {
+    title: 'Spider-Verse: Achievements & Badges Vault',
+    desc: 'View unlocked collectible Multiverse Badges and trophies earned through heroic trivia feats.'
+  },
+  profile: {
+    title: 'Spider-Verse: Player Profile & Dossier',
+    desc: 'Check your Spider-Sense accuracy, total score rating, and Multiverse hero standing.'
+  },
+  '404': {
+    title: "404 — Lost in the Web | Spider-Verse: Fact Attack",
+    desc: 'Looks like this page got caught in another web. Swing safely back to Spider-Verse Home.'
+  }
+};
 
 export default function App() {
   // Navigation: Multi-page web pages architecture
   const [currentPage, setCurrentPage] = useState<WebPageId>('cover');
   const [currentMode, setCurrentMode] = useState<GameMode>('tf');
 
-  // Cinematic Intro state
-  const [showIntro, setShowIntro] = useState<boolean>(false);
+  // Cinematic Intro state - defaults to true so it serves as the first page!
+  const [showIntro, setShowIntro] = useState<boolean>(true);
+
+  // About & Contact modals state
+  const [aboutOpen, setAboutOpen] = useState<boolean>(false);
+  const [contactOpen, setContactOpen] = useState<boolean>(false);
 
   // Comic Start Transition state (Section 8)
   const [transitionGame, setTransitionGame] = useState<{
@@ -86,6 +143,101 @@ export default function App() {
   // Bot Guide / Tip drawer
   const [tipDrawerOpen, setTipDrawerOpen] = useState<boolean>(false);
 
+  // Firebase Multiverse Persistent State (Cloud Firestore & Auth)
+  const {
+    user,
+    userProfile,
+    unlockedAchievementIds,
+    loading: authLoading,
+    syncAnswerResult,
+    recordFact,
+    recordAchievement
+  } = useSpiderAuth();
+
+  const [guestPromptOpen, setGuestPromptOpen] = useState<boolean>(false);
+
+  // Synchronize authenticated user stats from Cloud Firestore
+  useEffect(() => {
+    if (userProfile) {
+      setScore(userProfile.totalScore);
+      setStreak(userProfile.currentStreak);
+      setTriviaCleared(userProfile.factsDiscovered);
+    }
+  }, [userProfile]);
+
+  // Synchronize unlocked badges from Cloud Firestore
+  useEffect(() => {
+    if (unlockedAchievementIds && unlockedAchievementIds.length > 0) {
+      setBadges((prev) =>
+        prev.map((b) => ({
+          ...b,
+          unlocked: b.unlocked || unlockedAchievementIds.includes(b.id)
+        }))
+      );
+    }
+  }, [unlockedAchievementIds]);
+
+  // Success / Error Feedback Toast state (Requirements 12 & 13)
+  const [toast, setToast] = useState<ComicToast | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = (type: 'success' | 'error' | 'info', title: string, message?: string) => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+    setToast({
+      id: String(Date.now()),
+      type,
+      title,
+      message
+    });
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+    }, 3200);
+  };
+
+  // Sync document title and SEO meta description on every page change (Requirements 5 & 6)
+  useEffect(() => {
+    const meta = pageMeta[currentPage] || pageMeta.cover;
+    document.title = meta.title;
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) {
+      metaDesc.setAttribute('content', meta.desc);
+    }
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) {
+      ogTitle.setAttribute('content', meta.title);
+    }
+  }, [currentPage]);
+
+  // URL Hash synchronization & 404 route handling (Requirement 8)
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash.replace('#', '').trim();
+      if (!hash) return;
+      const validPages: WebPageId[] = [
+        'cover',
+        'auth',
+        'arcade',
+        'web_thrower',
+        'spider_id',
+        'trivia',
+        'canon',
+        'vault',
+        'profile',
+        '404'
+      ];
+      if (validPages.includes(hash as WebPageId)) {
+        setCurrentPage(hash as WebPageId);
+      } else {
+        setCurrentPage('404');
+      }
+    };
+    handleHash();
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
+
   // Web shooter callback ref
   const shootWebRef = useRef<((sx: number, sy: number, tx: number, ty: number) => void) | null>(null);
 
@@ -104,15 +256,26 @@ export default function App() {
     const next = !sfxEnabled;
     setSfxEnabled(next);
     setSfxMuted(!next);
-    if (next) playSound('thwip');
+    if (next) {
+      playSound('thwip');
+      showToast('info', 'SPIDER-AUDIO ONLINE', 'Sound effects enabled.');
+    } else {
+      showToast('info', 'AUDIO MUTED', 'Sound effects silenced.');
+    }
   };
 
   const navigateToPage = (page: WebPageId, triviaSubMode?: GameMode) => {
-    playSound('click');
+    playSound('thwip');
     setCurrentPage(page);
+    window.location.hash = page === 'cover' ? '' : page;
     if (triviaSubMode) {
       setCurrentMode(triviaSubMode);
     }
+    showToast(
+      'info',
+      'WEB CONNECTION ESTABLISHED',
+      `Swung to ${page === 'cover' ? 'Home Cover' : page.replace('_', ' ').toUpperCase()}`
+    );
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -149,9 +312,17 @@ export default function App() {
 
   const switchTriviaMode = (mode: GameMode) => {
     playSound('click');
-    setCurrentMode(mode);
-    setCurrentPage('trivia');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (mode === 'canon') {
+      navigateToPage('canon');
+    } else if (mode === 'badges') {
+      navigateToPage('vault');
+    } else if (mode === 'profile') {
+      navigateToPage('profile');
+    } else {
+      setCurrentMode(mode);
+      setCurrentPage('trivia');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handleStartAdventure = (e: React.MouseEvent) => {
@@ -163,64 +334,73 @@ export default function App() {
     setScore((s) => s + points);
     setTriviaCleared((tc) => tc + 1);
     registerScoreBurst(points);
+    syncAnswerResult(true, points, streak);
+    showToast('success', 'THWIP! COMIC POINTS ADDED', `+${points} PTS recorded in your dossier.`);
   };
 
   // 1. Fact Attack (True/False) Handler
-  const handleTFAnswer = (userChoice: boolean) => {
+  const handleTFAnswer = async (userChoice: boolean) => {
     const q = tfQuestions[tfIndex];
     const isCorrect = userChoice === q.isTrue;
+    const gained = isCorrect ? 200 * combo : 0;
+    const newStreak = isCorrect ? streak + 1 : 0;
+
+    syncAnswerResult(isCorrect, gained, newStreak);
 
     if (isCorrect) {
       playSound('correct');
-      const gained = 200 * combo;
       setScore((s) => s + gained);
       registerScoreBurst(gained);
       setCombo((c) => Math.min(c + 1, 5));
-      setStreak((st) => st + 1);
+      setStreak(newStreak);
       setTriviaCleared((tc) => tc + 1);
-
-      setModalCorrect(true);
-      setModalBadge('THWIP! CORRECT!');
-      setModalScore(`+${gained} PTS`);
+      showToast('success', 'THWIP! CORRECT!', `+${gained} PTS • Spider-Sense Combo x${Math.min(combo + 1, 5)}!`);
+      const isNew = await recordFact(`tf_${q.id}`, `Fact Attack: True or False #${q.id}`);
+      if (isNew) {
+        showToast('success', 'NEW FACT DISCOVERED!', 'Saved to your permanent Multiverse archive.');
+      }
+      recordAchievement('spider_recruit');
+      if (newStreak >= 5) recordAchievement('spider_sense');
+      if (triviaCleared + 1 >= 10) recordAchievement('wall_crawler');
     } else {
       playSound('wrong');
       setCombo(1);
       setStreak(0);
-
-      setModalCorrect(false);
-      setModalBadge('OOF! FICTION DETECTED!');
-      setModalScore('0 PTS');
+      showToast('error', "OOF! THAT DIDN'T WORK.", 'True comic canon revealed!');
     }
 
-    setModalTitle(q.storyTitle);
-    setModalBody(q.storyBody);
-    setModalNextCallback(() => () => {
-      const nextIdx = tfIndex + 1;
-      if (nextIdx >= tfQuestions.length) {
-        setIssueCompleteOpen(true);
-      }
-      setTfIndex((idx) => (idx + 1) % tfQuestions.length);
-      setModalOpen(false);
-    });
-    setModalOpen(true);
+    const nextIdx = tfIndex + 1;
+    if (nextIdx >= tfQuestions.length) {
+      setIssueCompleteOpen(true);
+      playSound('bam');
+      showToast('success', 'ISSUE COMPLETE!', 'You cleared all Fact Attack panels!');
+    }
+    setTfIndex((idx) => (idx + 1) % tfQuestions.length);
   };
 
   // 2. MCQ Handler
-  const handleMCQAnswer = (choiceIndex: number) => {
+  const handleMCQAnswer = async (choiceIndex: number) => {
     const q = mcqQuestions[mcqIndex];
     const isCorrect = choiceIndex === q.correctIndex;
+    const gained = isCorrect ? 300 * combo : 0;
+    const newStreak = isCorrect ? streak + 1 : 0;
+
+    syncAnswerResult(isCorrect, gained, newStreak);
 
     if (isCorrect) {
       playSound('correct');
-      const gained = 300 * combo;
       setScore((s) => s + gained);
       setCombo((c) => Math.min(c + 1, 5));
-      setStreak((st) => st + 1);
+      setStreak(newStreak);
       setTriviaCleared((tc) => tc + 1);
 
       setModalCorrect(true);
       setModalBadge('EXCELSIOR! CORRECT!');
       setModalScore(`+${gained} PTS`);
+      recordFact(`mcq_${q.id}`, q.storyTitle);
+      recordAchievement('spider_recruit');
+      if (newStreak >= 5) recordAchievement('spider_sense');
+      if (triviaCleared + 1 >= 10) recordAchievement('wall_crawler');
     } else {
       playSound('wrong');
       setCombo(1);
@@ -241,21 +421,26 @@ export default function App() {
   };
 
   // 3. Rogue Dossier Handler
-  const handleClueGuess = (suspectId: string) => {
+  const handleClueGuess = async (suspectId: string) => {
     const dossier = rogueDossiers[dossierIndex];
     const isCorrect = suspectId === dossier.id;
+    const gained = isCorrect ? 400 * combo : 0;
+    const newStreak = isCorrect ? streak + 1 : 0;
+
+    syncAnswerResult(isCorrect, gained, newStreak);
 
     if (isCorrect) {
       playSound('correct');
-      const gained = 400 * combo;
       setScore((s) => s + gained);
       setCombo((c) => Math.min(c + 1, 5));
-      setStreak((st) => st + 1);
+      setStreak(newStreak);
       setTriviaCleared((tc) => tc + 1);
 
       setModalCorrect(true);
       setModalBadge(`BAM! YOU NABBED ${dossier.alias.toUpperCase()}!`);
       setModalScore(`+${gained} PTS`);
+      recordFact(`rogue_${dossier.id}`, dossier.alias);
+      recordAchievement('spider_recruit');
     } else {
       playSound('wrong');
       setCombo(1);
@@ -276,21 +461,25 @@ export default function App() {
   };
 
   // 4. Who Said It Quote Handler
-  const handleWhoSaidItAnswer = (choiceIndex: number) => {
+  const handleWhoSaidItAnswer = async (choiceIndex: number) => {
     const q = whoSaidItQuestions[whoSaidItIndex];
     const isCorrect = choiceIndex === q.correctIndex;
+    const gained = isCorrect ? 350 * combo : 0;
+    const newStreak = isCorrect ? streak + 1 : 0;
+
+    syncAnswerResult(isCorrect, gained, newStreak);
 
     if (isCorrect) {
       playSound('correct');
-      const gained = 350 * combo;
       setScore((s) => s + gained);
       setCombo((c) => Math.min(c + 1, 5));
-      setStreak((st) => st + 1);
+      setStreak(newStreak);
       setTriviaCleared((tc) => tc + 1);
 
       setModalCorrect(true);
       setModalBadge('THWIP! QUOTE NAILED!');
       setModalScore(`+${gained} PTS`);
+      recordFact(`quote_${q.id}`, `${q.character} Quote`);
     } else {
       playSound('wrong');
       setCombo(1);
@@ -314,18 +503,22 @@ export default function App() {
   const handleSpeedAnswer = (choiceIndex: number, timeLeft: number) => {
     const q = speedQuestions[speedIndex];
     const isCorrect = choiceIndex === q.correctIndex;
+    const bonus = isCorrect ? Math.round(timeLeft * 50) : 0;
+    const newStreak = isCorrect ? streak + 1 : 0;
+
+    syncAnswerResult(isCorrect, bonus, newStreak);
 
     if (isCorrect) {
       playSound('correct');
-      const bonus = Math.round(timeLeft * 50);
       setScore((s) => s + bonus);
       setCombo((c) => Math.min(c + 1, 5));
-      setStreak((st) => st + 1);
+      setStreak(newStreak);
       setTriviaCleared((tc) => tc + 1);
 
       setModalCorrect(true);
       setModalBadge('LIGHTNING REFLEXES!');
       setModalScore(`+${bonus} PTS`);
+      recordFact(`speed_${q.id}`, q.explanationTitle);
     } else {
       playSound('wrong');
       setCombo(1);
@@ -366,9 +559,12 @@ export default function App() {
   return (
     <ComicEnvironment25D
       header={
-        <ComicHeader
+        <PersistentNavBar
           currentPage={currentPage}
-          onSelectPage={navigateToPage}
+          onNavigatePage={navigateToPage}
+          onOpenAbout={() => setAboutOpen(true)}
+          onOpenContact={() => setContactOpen(true)}
+          onReplayIntro={() => setShowIntro(true)}
           sfxEnabled={sfxEnabled}
           onToggleSFX={handleToggleSFX}
           onOpenBotGuide={() => {
@@ -398,74 +594,7 @@ export default function App() {
           }}
         />
       }
-      footer={
-        <footer className="w-full py-8 sm:py-12 px-4 sm:px-8 flex flex-col items-center justify-center gap-6 border-t-4 border-[#1b1b20] bg-[#1b1b20] text-[#ffdf9f]">
-          <div className="text-center">
-            <h2 className="font-comic text-2xl sm:text-3xl lg:text-4xl font-black uppercase text-[#dc3132] leading-none">
-              SPIDER-VERSE: FACT ATTACK
-            </h2>
-            <p className="text-xs sm:text-sm text-[#f0ecf4] font-semibold mt-1 tracking-wider uppercase">
-              THE DEFINITIVE WEB-SLINGER MULTIVERSE INTERACTIVE COMPENDIUM
-            </p>
-          </div>
-
-          <nav className="flex flex-wrap justify-center gap-x-6 gap-y-2 font-comic text-xs font-black uppercase tracking-wider">
-            <button
-              onClick={() => navigateToPage('arcade')}
-              className="text-[#dc2626] bg-white px-2 py-0.5 border border-white hover:bg-[#ffdf9f] transition-colors duration-150 cursor-pointer"
-            >
-              🕹️ 6 Games Arcade
-            </button>
-            <button
-              onClick={() => navigateToPage('web_thrower')}
-              className="text-[#f0ecf4] hover:text-[#dc2626] transition-colors duration-150 cursor-pointer"
-            >
-              🎯 Web Thrower 3D
-            </button>
-            <button
-              onClick={() => navigateToPage('spider_id')}
-              className="text-[#f0ecf4] hover:text-[#006398] transition-colors duration-150 cursor-pointer"
-            >
-              👥 Identify Spider-Man
-            </button>
-            <button
-              onClick={() => navigateToPage('canon')}
-              className="text-[#f0ecf4] hover:text-white transition-colors duration-150 cursor-pointer"
-            >
-              Comic Canon Archives
-            </button>
-            <button
-              onClick={handleToggleSFX}
-              className="text-[#f0ecf4] hover:text-white transition-colors duration-150 cursor-pointer"
-            >
-              Soundtrack & SFX
-            </button>
-            <button
-              onClick={() => navigateToPage('vault')}
-              className="text-[#f0ecf4] hover:text-white transition-colors duration-150 cursor-pointer"
-            >
-              Multiverse Badges
-            </button>
-            <button
-              onClick={() => navigateToPage('profile')}
-              className="text-[#f0ecf4] hover:text-white transition-colors duration-150 cursor-pointer"
-            >
-              Hero Dossier
-            </button>
-          </nav>
-
-          <div className="flex flex-col sm:flex-row items-center gap-4 text-center border-t border-[#dcd9e0]/20 pt-4 w-full max-w-4xl justify-between">
-            <p className="text-xs text-[#f0ecf4]/80">
-              © 1962-2024 MARVEL TRIBUTE MULTIVERSE TRIVIA. APPROVED BY THE COMICS CODE AUTHORITY.
-            </p>
-            <div className="flex items-center gap-2 text-xs font-mono text-[#ffdf9f] font-bold">
-              <span>EXCELSIOR!</span>
-              <span>•</span>
-              <span>WITH GREAT POWER COMES GREAT TRIVIA!</span>
-            </div>
-          </div>
-        </footer>
-      }
+      footer={<CompactCreatorFooter />}
     >
       {/* Interactive Web Canvas FX */}
       <WebCanvas
@@ -547,6 +676,8 @@ export default function App() {
                         <img
                           src="https://lh3.googleusercontent.com/aida-public/AB6AXuBscJXRK3PQxN14y7ZBa1HeEaeJRivX4LKWY0Ibqt4SLEc47fjTssLmWcgB8nRfEs5MlZLLlpioR8yVyrBKCqXaIJpydiDP0fO9ukdl2-_V95w5kfbLtXTQ8uaWCLjKubu0o_Esu-lk57P7BXM3JoWYUIg4ildlwySRBvjLN-d7T9i120roNbYcyNQUK93Q3jRF24wvFBIoE17uFrubqnzGr8fAc6-oa-t-NmYbb_I1Hvj_vWU-Rw4"
                           alt="Web Thrower 3D"
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                         />
                         <div className="comic-halftone absolute inset-0 pointer-events-none" />
@@ -558,7 +689,14 @@ export default function App() {
                         Sling web fluid at gliding Sinister Six villains across NYC rooftops with interactive crosshairs!
                       </p>
                     </div>
-                    <button className="mt-3 w-full bg-[#dc2626] text-white font-comic text-xs font-black py-2 border border-[#1b1b20] uppercase ink-btn cursor-pointer">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigateToPage('web_thrower');
+                      }}
+                      className="mt-3 w-full bg-[#dc2626] hover:bg-[#b8121d] text-white font-comic text-xs font-black py-2 border border-[#1b1b20] uppercase ink-btn cursor-pointer"
+                    >
                       PLAY WEB THROWER →
                     </button>
                   </div>
@@ -580,6 +718,8 @@ export default function App() {
                         <img
                           src="https://lh3.googleusercontent.com/aida-public/AB6AXuDFk5sX611T905P2P_E7h8566Q-8Fk_x2y8M5N5kG70kR8Q7H7P5uP-8yJ3k_mQ_7H0k8F4P8H407"
                           alt="Identify Spider-Man Characters"
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                           onError={(e) => {
                             // Fallback comic asset
@@ -596,7 +736,14 @@ export default function App() {
                         Inspect 3D cards, decipher secret identity clues, and collect all 10 multiverse Spider-Man variants!
                       </p>
                     </div>
-                    <button className="mt-3 w-full bg-[#006398] text-white font-comic text-xs font-black py-2 border border-[#1b1b20] uppercase ink-btn cursor-pointer">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigateToPage('spider_id');
+                      }}
+                      className="mt-3 w-full bg-[#006398] hover:bg-[#004e78] text-white font-comic text-xs font-black py-2 border border-[#1b1b20] uppercase ink-btn cursor-pointer"
+                    >
                       PLAY IDENTI-MATCH →
                     </button>
                   </div>
@@ -618,6 +765,8 @@ export default function App() {
                         <img
                           src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_s1f4y1M7J09k0M0u7B5N5kG70kR8Q7H7P5uP-8yJ3k_mQ_7H0k8F4P8H407"
                           alt="Fact Attack Trivia"
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                           onError={(e) => {
                             (e.target as HTMLImageElement).src =
@@ -633,7 +782,14 @@ export default function App() {
                         Rapid-fire comic canon truths versus webbed myths with authentic comic panel popups!
                       </p>
                     </div>
-                    <button className="mt-3 w-full bg-[#f9bd22] text-[#1b1b20] font-comic text-xs font-black py-2 border border-[#1b1b20] uppercase ink-btn cursor-pointer">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigateToPage('trivia', 'tf');
+                      }}
+                      className="mt-3 w-full bg-[#f9bd22] hover:bg-[#e0a618] text-[#1b1b20] font-comic text-xs font-black py-2 border border-[#1b1b20] uppercase ink-btn cursor-pointer"
+                    >
                       PLAY FACT ATTACK →
                     </button>
                   </div>
@@ -754,7 +910,18 @@ export default function App() {
             badges={badges}
           />
         )}
+
+        {/* PAGE 9: CUSTOM 404 COMIC PAGE (Requirement 8) */}
+        {currentPage === '404' && (
+          <NotFoundComicPage
+            onReturnHome={() => navigateToPage('cover')}
+            onReturnToGame={() => launchGameWithTransition('arcade')}
+          />
+        )}
       </main>
+
+      {/* Comic Feedback Toast Notification (Requirements 12 & 13) */}
+      <ComicFeedbackToast toast={toast} onDismiss={() => setToast(null)} />
 
       {/* Comic Start Panel Slam Transition (Section 8) */}
       {transitionGame && (
@@ -809,6 +976,17 @@ export default function App() {
         isOpen={tipDrawerOpen}
         onClose={() => setTipDrawerOpen(false)}
         onOpen={() => setTipDrawerOpen(true)}
+      />
+
+      {/* Persistent Navigation About & Contact Modals */}
+      <AboutModal
+        isOpen={aboutOpen}
+        onClose={() => setAboutOpen(false)}
+        onReplayIntro={() => setShowIntro(true)}
+      />
+      <ContactModal
+        isOpen={contactOpen}
+        onClose={() => setContactOpen(false)}
       />
     </ComicEnvironment25D>
   );

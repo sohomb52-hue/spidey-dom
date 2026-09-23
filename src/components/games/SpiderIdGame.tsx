@@ -164,6 +164,8 @@ export const SpiderIdGame: React.FC<SpiderIdGameProps> = ({ onBackToArcade, onAd
                       <img
                         src={currentHero.image}
                         alt="Spider-Man Multiverse Variant"
+                        loading="lazy"
+                        decoding="async"
                         className={`w-full h-full object-cover transition-all duration-500 ${
                           isAnswered ? 'filter-none scale-100' : 'filter contrast-150 brightness-75 blur-[1px]'
                         }`}
@@ -379,6 +381,8 @@ export const SpiderIdGame: React.FC<SpiderIdGameProps> = ({ onBackToArcade, onAd
                         <img
                           src={hero.image}
                           alt={hero.alias}
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover filter contrast-110"
                         />
                         <div className="comic-halftone absolute inset-0 pointer-events-none" />

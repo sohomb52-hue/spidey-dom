@@ -29,6 +29,7 @@ export const WhoSaidItMode: React.FC<WhoSaidItModeProps> = ({
   } | null>(null);
 
   const handleSelect = (idx: number, e: React.MouseEvent) => {
+    if (selectedIdx !== null) return;
     const isCorrect = idx === question.correctIndex;
     setSelectedIdx({ index: idx, isCorrect });
     onTriggerWeb(e);
@@ -106,6 +107,8 @@ export const WhoSaidItMode: React.FC<WhoSaidItModeProps> = ({
               <img
                 src={question.characterImage}
                 alt="Mystery Speaker Artwork"
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover filter contrast-110 saturate-90 hover:scale-105 transition-transform duration-300"
               />
               <div className="absolute inset-0 comic-halftone pointer-events-none" />

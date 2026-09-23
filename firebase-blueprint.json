@@ -1,0 +1,108 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile and cumulative Spider-Verse stats.",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string" },
+        "lastLoginAt": { "type": "string" },
+        "totalXP": { "type": "number" },
+        "totalScore": { "type": "number" },
+        "totalQuestions": { "type": "number" },
+        "correctAnswers": { "type": "number" },
+        "bestStreak": { "type": "number" },
+        "currentStreak": { "type": "number" },
+        "factsDiscovered": { "type": "number" },
+        "gamesPlayed": { "type": "number" },
+        "achievementsUnlocked": { "type": "number" },
+        "lastPlayedAt": { "type": "string" }
+      },
+      "required": [
+        "displayName",
+        "email",
+        "createdAt",
+        "totalScore",
+        "totalXP",
+        "totalQuestions",
+        "correctAnswers",
+        "bestStreak",
+        "currentStreak",
+        "factsDiscovered",
+        "gamesPlayed",
+        "achievementsUnlocked"
+      ]
+    },
+    "GameSession": {
+      "title": "GameSession",
+      "description": "A completed or saved game round session.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "gameMode": { "type": "string", "maxLength": 100 },
+        "score": { "type": "number" },
+        "questionsAnswered": { "type": "number" },
+        "correctAnswers": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "bestStreak": { "type": "number" },
+        "xpEarned": { "type": "number" },
+        "completedAt": { "type": "string" },
+        "factsDiscovered": { "type": "number" }
+      },
+      "required": [
+        "userId",
+        "gameMode",
+        "score",
+        "questionsAnswered",
+        "correctAnswers",
+        "accuracy",
+        "bestStreak",
+        "xpEarned",
+        "completedAt"
+      ]
+    },
+    "DiscoveredFact": {
+      "title": "DiscoveredFact",
+      "description": "A unique Spider-Man comic canon fact discovered by the user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "factId": { "type": "string", "maxLength": 100 },
+        "discoveredAt": { "type": "string" },
+        "gameMode": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["userId", "factId", "discoveredAt"]
+    },
+    "UnlockedAchievement": {
+      "title": "UnlockedAchievement",
+      "description": "An achievement badge earned by the hero.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "achievementId": { "type": "string", "maxLength": 100 },
+        "unlockedAt": { "type": "string" }
+      },
+      "required": ["userId", "achievementId", "unlockedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile with Spider-Verse stats, accessible only by owner."
+    },
+    "/users/{userId}/gameSessions/{sessionId}": {
+      "schema": "GameSession",
+      "description": "History of individual game mode runs completed by this user."
+    },
+    "/users/{userId}/discoveredFacts/{factId}": {
+      "schema": "DiscoveredFact",
+      "description": "Unique comic canon facts discovered by this user."
+    },
+    "/users/{userId}/achievements/{achievementId}": {
+      "schema": "UnlockedAchievement",
+      "description": "Persistent achievements unlocked by this user."
+    }
+  }
+}

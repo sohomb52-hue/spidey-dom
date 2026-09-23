@@ -94,6 +94,8 @@ export const ArcadePage: React.FC<ArcadePageProps> = ({
                   <img
                     src={game.coverImage}
                     alt={game.title}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover filter contrast-110 saturate-110"
                   />
                   <div className="comic-halftone absolute inset-0 pointer-events-none" />

@@ -201,21 +201,16 @@ export const ComicEnvironment25D: React.FC<ComicEnvironment25DProps> = ({
           LAYER 5 — UI (Fixed Score, Buttons, Navigation, Top HUD on uppermost plane)
           ========================================================================= */}
       {(header || hud) && (
-        <header className="relative z-50 pointer-events-auto">
+        <div className="relative z-50 pointer-events-auto">
           {header}
           {hud}
-        </header>
+        </div>
       )}
 
       {/* =========================================================================
-          LAYER 3 — COMIC PANELS (Floating at controlled depth, subtle perspective)
+          LAYER 3 — COMIC PANELS (Stable container so all button clicks register immediately)
           ========================================================================= */}
-      <div
-        className="relative z-10 perspective-scene transition-transform duration-100 ease-out"
-        style={{
-          transform: `rotateX(${offsets.panelTiltX}deg) rotateY(${offsets.panelTiltY}deg) translate3d(${offsets.panelTranslateX}px, ${offsets.panelTranslateY}px, 0px)`
-        }}
-      >
+      <div className="relative z-10 w-full">
         {children}
       </div>
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { MCQQuestion } from '../../types';
 import { playSound } from '../../utils/audio';
-import { ComicImpactBurst, ComicPanelWebCorner } from '../ComicActionOverlay';
+import { ComicImpactBurst, ComicPanelWebCorner, ComicPanelForegroundPerch } from '../ComicActionOverlay';
 
 interface WebOfKnowledgeModeProps {
   question: MCQQuestion;
@@ -28,6 +28,7 @@ export const WebOfKnowledgeMode: React.FC<WebOfKnowledgeModeProps> = ({
   } | null>(null);
 
   const handleClick = (idx: number, e: React.MouseEvent) => {
+    if (selectedIdx !== null) return;
     const isCorrect = idx === question.correctIndex;
     setSelectedIdx({ index: idx, isCorrect });
     onTriggerWeb(e);
@@ -36,15 +37,15 @@ export const WebOfKnowledgeMode: React.FC<WebOfKnowledgeModeProps> = ({
       playSound('bam');
       setImpact({
         type: 'correct',
-        text: 'THWIP!',
+        text: 'BAM!',
         subtext: 'LORE MASTER!',
-        points: 150
+        points: 300
       });
     } else {
       playSound('wrong');
       setImpact({
         type: 'wrong',
-        text: 'WHAM!',
+        text: 'OOF!',
         subtext: 'ARCHIVE MISMATCH!',
         points: 0
       });
@@ -59,7 +60,7 @@ export const WebOfKnowledgeMode: React.FC<WebOfKnowledgeModeProps> = ({
   };
 
   return (
-    <section className="space-y-4 preserve-3d">
+    <section className="space-y-4 preserve-3d" aria-label="Web of Knowledge Challenge">
       {impact && (
         <ComicImpactBurst
           type={impact.type}
@@ -74,6 +75,11 @@ export const WebOfKnowledgeMode: React.FC<WebOfKnowledgeModeProps> = ({
         className="border-4 sm:border-6 border-[#1b1b20] bg-white p-4 sm:p-6 depth-shadow-comic relative overflow-visible animate-panel-enter animate-web-pull"
         style={{ transformStyle: 'preserve-3d' }}
       >
+        {/* Layered Foreground Element */}
+        <ComicPanelForegroundPerch
+          senseActive={currentIndex % 2 === 1}
+          mood={selectedIdx ? (selectedIdx.isCorrect ? 'victory' : 'warning') : 'curious'}
+        />
         <ComicPanelWebCorner position="top-right" variant="web" />
         <ComicPanelWebCorner position="bottom-left" variant="badge" />
 

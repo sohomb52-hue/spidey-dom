@@ -62,10 +62,11 @@ export const HeroCover: React.FC<HeroCoverProps> = ({ onStartAdventure, onNaviga
       </div>
 
       {/* 2.5D Layered Comic Backdrop with Attached NYC Skyline & Action Pose */}
-      <div className="relative w-full h-[400px] md:h-[480px] border-3 sm:border-4 border-[#1b1b20] overflow-hidden flex items-end">
+      <div className="relative w-full min-h-[450px] sm:min-h-[420px] md:h-[480px] border-3 sm:border-4 border-[#1b1b20] overflow-hidden flex items-end">
         {/* Layer 1: Skyline Artwork */}
         <img
           alt="Classic Spider-Man high-rise comic skyline of New York City during golden hour"
+          decoding="async"
           className="absolute inset-0 w-full h-full object-cover object-center filter saturate-125 contrast-110"
           src="https://lh3.googleusercontent.com/aida-public/AB6AXuBscJXRK3PQxN14y7ZBa1HeEaeJRivX4LKWY0Ibqt4SLEc47fjTssLmWcgB8nRfEs5MlZLLlpioR8yVyrBKCqXaIJpydiDP0fO9ukdl2-_V95w5kfbLtXTQ8uaWCLjKubu0o_Esu-lk57P7BXM3JoWYUIg4ildlwySRBvjLN-d7T9i120roNbYcyNQUK93Q3jRF24wvFBIoE17uFrubqnzGr8fAc6-oa-t-NmYbb_I1Hvj_vWU-Rw4"
         />

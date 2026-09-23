@@ -7,7 +7,7 @@ export interface ParallaxOffsets {
   // Layer 2: Midground city (Building silhouettes, illuminated windows, weblines)
   cityX: number;
   cityY: number;
-  // Layer 3: Main interactive comic panels (Perspective tilt and slight translation)
+  // Layer 3: Main interactive comic panels (Stable to keep buttons 100% click-responsive)
   panelTiltX: number;
   panelTiltY: number;
   panelTranslateX: number;
@@ -38,6 +38,7 @@ export function useComicParallax(): ParallaxOffsets {
   const scrollRef = useRef({ scrollY: 0, maxScroll: 1 });
   const isTouchRef = useRef(false);
   const animFrameRef = useRef<number | null>(null);
+  const lastOffsetsRef = useRef(offsets);
 
   useEffect(() => {
     // Respect reduced motion
@@ -49,12 +50,10 @@ export function useComicParallax(): ParallaxOffsets {
 
     const handleMouseMove = (e: MouseEvent) => {
       if (isTouchRef.current) return;
-      // Normalize to -1 ... 1 from viewport center
       const centerX = window.innerWidth / 2;
       const centerY = window.innerHeight / 2;
       const nx = (e.clientX - centerX) / centerX;
       const ny = (e.clientY - centerY) / centerY;
-      // Clamp to prevent extreme movement
       mouseRef.current.targetX = Math.max(-1, Math.min(1, nx));
       mouseRef.current.targetY = Math.max(-1, Math.min(1, ny));
     };
@@ -74,79 +73,80 @@ export function useComicParallax(): ParallaxOffsets {
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('resize', handleResize, { passive: true });
 
-    // Smooth animation loop using interpolation
     let lastTime = performance.now();
     const update = (time: number) => {
       const delta = Math.min((time - lastTime) / 1000, 0.1);
       lastTime = time;
 
       if (!isTouchRef.current) {
-        // Desktop mouse tracking with cinematic damping
-        // Smooth lerp: factor 4.5 * delta
-        const lerpFactor = Math.min(1, 4.5 * delta);
-        mouseRef.current.currentX += (mouseRef.current.targetX - mouseRef.current.currentX) * lerpFactor;
-        mouseRef.current.currentY += (mouseRef.current.targetY - mouseRef.current.currentY) * lerpFactor;
+        const dx = mouseRef.current.targetX - mouseRef.current.currentX;
+        const dy = mouseRef.current.targetY - mouseRef.current.currentY;
 
-        const mx = mouseRef.current.currentX;
-        const my = mouseRef.current.currentY;
+        // Only update if there is significant movement (prevents idle 60fps React state churn)
+        if (Math.abs(dx) > 0.005 || Math.abs(dy) > 0.005) {
+          const lerpFactor = Math.min(1, 4 * delta);
+          mouseRef.current.currentX += dx * lerpFactor;
+          mouseRef.current.currentY += dy * lerpFactor;
 
-        // Cinematic subtle parallax:
-        // Background (Layer 1): deep space moves slightly in opposite direction
-        const bgX = -mx * 6;
-        const bgY = -my * 4;
+          const mx = mouseRef.current.currentX;
+          const my = mouseRef.current.currentY;
 
-        // City (Layer 2): midground silhouettes
-        const cityX = -mx * 14;
-        const cityY = -my * 8;
+          // Parallax for decorative environment layers
+          const bgX = parseFloat((-mx * 6).toFixed(1));
+          const bgY = parseFloat((-my * 4).toFixed(1));
+          const cityX = parseFloat((-mx * 12).toFixed(1));
+          const cityY = parseFloat((-my * 8).toFixed(1));
+          const charX = parseFloat((mx * 16).toFixed(1));
+          const charY = parseFloat((my * 10).toFixed(1));
 
-        // Comic Panels (Layer 3): subtle 3D perspective tilt
-        // User should feel looking into a scene, not the whole page wobbling
-        const panelTiltY = mx * 1.5; // rotateY (degrees)
-        const panelTiltX = -my * 1.5; // rotateX (degrees)
-        const panelTranslateX = mx * 3;
-        const panelTranslateY = my * 2;
-
-        // Character (Layer 4): foreground Spider-Man silhouette
-        // Foreground moves in stronger parallax to produce stereoscopic 2.5D depth separation!
-        const charX = -mx * 26;
-        const charY = -my * 16;
-
-        setOffsets({
-          bgX: parseFloat(bgX.toFixed(2)),
-          bgY: parseFloat(bgY.toFixed(2)),
-          cityX: parseFloat(cityX.toFixed(2)),
-          cityY: parseFloat(cityY.toFixed(2)),
-          panelTiltX: parseFloat(panelTiltX.toFixed(2)),
-          panelTiltY: parseFloat(panelTiltY.toFixed(2)),
-          panelTranslateX: parseFloat(panelTranslateX.toFixed(2)),
-          panelTranslateY: parseFloat(panelTranslateY.toFixed(2)),
-          charX: parseFloat(charX.toFixed(2)),
-          charY: parseFloat(charY.toFixed(2)),
-          isMobile: false
-        });
+          // Check if changed from previous
+          if (
+            Math.abs(bgX - lastOffsetsRef.current.bgX) >= 0.2 ||
+            Math.abs(bgY - lastOffsetsRef.current.bgY) >= 0.2 ||
+            Math.abs(cityX - lastOffsetsRef.current.cityX) >= 0.2
+          ) {
+            const next = {
+              bgX,
+              bgY,
+              cityX,
+              cityY,
+              panelTiltX: 0,
+              panelTiltY: 0,
+              panelTranslateX: 0,
+              panelTranslateY: 0,
+              charX,
+              charY,
+              isMobile: false
+            };
+            lastOffsetsRef.current = next;
+            setOffsets(next);
+          }
+        }
       } else {
-        // Mobile scroll-based depth movement
         const { scrollY, maxScroll } = scrollRef.current;
-        const progress = Math.min(1, scrollY / maxScroll); // 0 to 1
+        const progress = Math.min(1, scrollY / maxScroll);
 
-        // Differentiated vertical parallax as user reads down the comic
-        const bgY = progress * -30;
-        const cityY = progress * -70;
-        const charY = progress * -120;
+        const bgY = parseFloat((progress * -20).toFixed(1));
+        const cityY = parseFloat((progress * -45).toFixed(1));
+        const charY = parseFloat((progress * -70).toFixed(1));
 
-        setOffsets({
-          bgX: 0,
-          bgY: parseFloat(bgY.toFixed(2)),
-          cityX: 0,
-          cityY: parseFloat(cityY.toFixed(2)),
-          panelTiltX: 0,
-          panelTiltY: 0,
-          panelTranslateX: 0,
-          panelTranslateY: 0,
-          charX: 0,
-          charY: parseFloat(charY.toFixed(2)),
-          isMobile: true
-        });
+        if (Math.abs(cityY - lastOffsetsRef.current.cityY) >= 0.5) {
+          const next = {
+            bgX: 0,
+            bgY,
+            cityX: 0,
+            cityY,
+            panelTiltX: 0,
+            panelTiltY: 0,
+            panelTranslateX: 0,
+            panelTranslateY: 0,
+            charX: 0,
+            charY,
+            isMobile: true
+          };
+          lastOffsetsRef.current = next;
+          setOffsets(next);
+        }
       }
 
       animFrameRef.current = requestAnimationFrame(update);

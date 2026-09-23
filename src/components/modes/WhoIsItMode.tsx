@@ -28,6 +28,7 @@ export const WhoIsItMode: React.FC<WhoIsItModeProps> = ({
   } | null>(null);
 
   const handleGuess = (id: string, e: React.MouseEvent) => {
+    if (activeGuess !== null) return;
     const isCorrect = id === dossier.id;
     setActiveGuess({ id, isCorrect });
     onTriggerWeb(e);
@@ -104,6 +105,8 @@ export const WhoIsItMode: React.FC<WhoIsItModeProps> = ({
               <img
                 src={dossier.image}
                 alt="Classified suspect surveillance"
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover filter contrast-125 saturate-50 hover:saturate-100 transition-all duration-300 hover:scale-105"
               />
               <div className="absolute top-2 left-2 bg-[#b8121d] text-white text-[9px] font-mono px-1 py-0.2 font-bold uppercase">

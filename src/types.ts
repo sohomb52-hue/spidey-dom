@@ -6,7 +6,57 @@ export type WebPageId =
   | 'trivia'
   | 'canon'
   | 'vault'
-  | 'profile';
+  | 'profile'
+  | 'auth'
+  | '404';
+
+export interface UserProfile {
+  id: string;
+  displayName: string;
+  email: string;
+  createdAt: string;
+  lastLoginAt: string;
+  totalXP: number;
+  totalScore: number;
+  totalQuestions: number;
+  correctAnswers: number;
+  bestStreak: number;
+  currentStreak: number;
+  factsDiscovered: number;
+  gamesPlayed: number;
+  achievementsUnlocked: number;
+  lastPlayedAt: string;
+}
+
+export interface GameSessionRecord {
+  id: string;
+  userId: string;
+  gameMode: string;
+  score: number;
+  questionsAnswered: number;
+  correctAnswers: number;
+  accuracy: number;
+  bestStreak: number;
+  xpEarned: number;
+  completedAt: string;
+  factsDiscovered: number;
+}
+
+export interface DiscoveredFactRecord {
+  id: string;
+  userId: string;
+  factId: string;
+  discoveredAt: string;
+  gameMode: string;
+}
+
+export interface AchievementRecord {
+  id: string;
+  userId: string;
+  achievementId: string;
+  unlockedAt: string;
+}
+
 
 export type GameMode =
   | 'cover'

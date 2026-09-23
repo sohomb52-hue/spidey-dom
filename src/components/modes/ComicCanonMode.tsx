@@ -122,6 +122,8 @@ export const ComicCanonMode: React.FC<{ onTriggerWeb: (e: React.MouseEvent) => v
                   <img
                     src={item.imageUrl}
                     alt={item.title}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-36 object-cover filter contrast-105 hover:scale-105 transition-transform duration-300"
                   />
                   {/* Like Button directly below the comic illustration */}

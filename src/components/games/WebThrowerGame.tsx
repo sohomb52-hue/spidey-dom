@@ -26,7 +26,10 @@ interface WebSplat {
   text?: string;
 }
 
-export const WebThrowerGame: React.FC<{ onBackToArcade: () => void }> = ({ onBackToArcade }) => {
+export const WebThrowerGame: React.FC<{
+  onBackToArcade: () => void;
+  onAddScore?: (points: number) => void;
+}> = ({ onBackToArcade, onAddScore }) => {
   const [score, setScore] = useState<number>(0);
   const [highScore, setHighScore] = useState<number>(() => {
     return parseInt(localStorage.getItem('web_thrower_high_score') || '1450', 10);
@@ -227,6 +230,9 @@ export const WebThrowerGame: React.FC<{ onBackToArcade: () => void }> = ({ onBac
           playSound('correct');
           const pointsEarned = t.points * combo;
           setScore((s) => s + pointsEarned);
+          if (onAddScore) {
+            onAddScore(pointsEarned);
+          }
           setCombo((c) => Math.min(c + 1, 8));
           return {
             ...t,
