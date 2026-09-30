@@ -3,6 +3,8 @@ export type WebPageId =
   | 'arcade'
   | 'web_thrower'
   | 'spider_id'
+  | 'web_swing'
+  | 'spider_sense_reaction'
   | 'trivia'
   | 'canon'
   | 'vault'
@@ -69,7 +71,9 @@ export type GameMode =
   | 'badges'
   | 'profile'
   | 'web_thrower'
-  | 'spider_id';
+  | 'spider_id'
+  | 'web_swing'
+  | 'spider_sense_reaction';
 
 export interface SpiderCharacter {
   id: string;

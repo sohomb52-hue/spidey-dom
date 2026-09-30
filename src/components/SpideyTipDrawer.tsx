@@ -24,8 +24,8 @@ export const SpideyTipDrawer: React.FC<SpideyTipDrawerProps> = ({
 
   return (
     <>
-      {/* Floating Bottom-Right Pill from Image 11 */}
-      <div className="fixed bottom-4 right-4 z-40">
+      {/* Floating Bottom-Right Pill for Lore Tips (stacked above AI Chat) */}
+      <div className="fixed bottom-20 right-4 z-40">
         <button
           onClick={() => {
             playSound('click');

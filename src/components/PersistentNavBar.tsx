@@ -36,6 +36,7 @@ interface PersistentNavBarProps {
   sfxEnabled: boolean;
   onToggleSFX: () => void;
   onOpenBotGuide: () => void;
+  onOpenSpideyChat?: () => void;
 }
 
 export const PersistentNavBar: React.FC<PersistentNavBarProps> = ({
@@ -46,7 +47,8 @@ export const PersistentNavBar: React.FC<PersistentNavBarProps> = ({
   onReplayIntro,
   sfxEnabled,
   onToggleSFX,
-  onOpenBotGuide
+  onOpenBotGuide,
+  onOpenSpideyChat
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, userProfile, logOut } = useSpiderAuth();
@@ -172,7 +174,7 @@ export const PersistentNavBar: React.FC<PersistentNavBarProps> = ({
             <span>PLAY</span>
           </button>
 
-          {/* FACTS (Canon Archives) */}
+          {/* CANON ARCHIVES */}
           <button
             type="button"
             onClick={() => handleNavClick('canon')}
@@ -182,8 +184,8 @@ export const PersistentNavBar: React.FC<PersistentNavBarProps> = ({
                 : 'bg-white text-[#1b1b20] border-transparent hover:border-[#1b1b20] hover:bg-[#fff0f0]'
             }`}
           >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>FACTS</span>
+            <BookOpen className="w-3.5 h-3.5 text-[#dc2626]" />
+            <span>CANON ARCHIVES</span>
           </button>
 
           {/* CHALLENGES (Trivia modes) */}
@@ -300,16 +302,30 @@ export const PersistentNavBar: React.FC<PersistentNavBarProps> = ({
             </button>
           )}
 
-          {/* Spidey Bot Guide */}
+          {/* Spidey AI Fact Checker Chatbot Button */}
+          {onOpenSpideyChat && (
+            <button
+              type="button"
+              onClick={onOpenSpideyChat}
+              className="bg-[#ffdf9f] hover:bg-[#facc15] border-2 border-[#1b1b20] px-2.5 py-1 flex items-center gap-1.5 ink-shadow-sm font-comic text-[11px] font-black uppercase text-[#1b1b20] ink-btn cursor-pointer min-h-[36px]"
+              title="Chat with Spidey - Your Friendly Neighborhood Fact Checker"
+              aria-label="Open Spidey AI Chatbot"
+            >
+              <span className="text-xs">🕷️</span>
+              <span className="hidden sm:inline">ASK SPIDEY</span>
+            </button>
+          )}
+
+          {/* Spidey Bot Guide (Lore Tips) */}
           <button
             type="button"
             onClick={onOpenBotGuide}
-            className="bg-[#fee2e2] hover:bg-[#fecaca] border-2 border-[#1b1b20] px-2.5 py-1 flex items-center gap-1.5 ink-shadow-sm font-comic text-[11px] font-black uppercase text-[#991b1b] ink-btn cursor-pointer min-h-[36px]"
-            title="Open Spidey Bot Assistant"
-            aria-label="Open Spidey Bot Assistant"
+            className="bg-[#fee2e2] hover:bg-[#fecaca] border-2 border-[#1b1b20] px-2 py-1 flex items-center gap-1 ink-shadow-sm font-comic text-[11px] font-black uppercase text-[#991b1b] ink-btn cursor-pointer min-h-[36px]"
+            title="Open Spidey Lore Tips Drawer"
+            aria-label="Open Spidey Lore Tips Drawer"
           >
             <SpiderBotGuide className="w-4 h-4" />
-            <span className="hidden sm:inline">BOT</span>
+            <span className="hidden md:inline">TIPS</span>
           </button>
 
           {/* SFX Mute/Unmute */}
@@ -459,7 +475,7 @@ export const PersistentNavBar: React.FC<PersistentNavBarProps> = ({
               <span>PLAY (ARCADE)</span>
             </button>
 
-            {/* FACTS (Canon) */}
+            {/* CANON ARCHIVES */}
             <button
               type="button"
               onClick={() => handleNavClick('canon')}
@@ -468,7 +484,7 @@ export const PersistentNavBar: React.FC<PersistentNavBarProps> = ({
               }`}
             >
               <BookOpen className="w-4 h-4 text-[#dc2626] flex-shrink-0" />
-              <span>FACTS (CANON)</span>
+              <span>CANON ARCHIVES</span>
             </button>
 
             {/* CHALLENGES (Trivia) */}
@@ -506,6 +522,22 @@ export const PersistentNavBar: React.FC<PersistentNavBarProps> = ({
               <User className="w-4 h-4 text-[#006398] flex-shrink-0" />
               <span>HERO DOSSIER</span>
             </button>
+
+            {/* SPIDEY AI CHATBOT (Mobile) */}
+            {onOpenSpideyChat && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  playSound('thwip');
+                  onOpenSpideyChat();
+                }}
+                className="p-3 min-h-[48px] border-2 border-[#1b1b20] font-comic text-xs font-black uppercase flex items-center gap-2.5 cursor-pointer ink-btn ink-shadow-sm bg-[#ffdf9f] text-[#1b1b20]"
+              >
+                <span className="text-base">🕷️</span>
+                <span>ASK SPIDEY (AI FACT CHECKER)</span>
+              </button>
+            )}
           </div>
 
           {/* Secondary Options: About, Contact, Cinematic Intro */}

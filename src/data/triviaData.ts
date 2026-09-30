@@ -1,4 +1,13 @@
 import { TFQuestion, MCQQuestion, RogueDossier, SpeedQuestion, CanonEntry, BadgeItem, WhoSaidItQuestion } from '../types';
+import {
+  VILLAIN_GREEN_GOBLIN,
+  VILLAIN_DOC_OCK,
+  VILLAIN_VENOM,
+  CHAR_UNCLE_BEN,
+  CHAR_MARY_JANE,
+  CHAR_MILES_1610,
+  CHAR_JJ_JAMESON
+} from './spiderArtAssets';
 
 export const tfQuestions: TFQuestion[] = [
   {
@@ -121,7 +130,7 @@ export const rogueDossiers: RogueDossier[] = [
     id: 'goblin',
     alias: 'Green Goblin',
     realName: 'Norman Osborn',
-    image: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80',
+    image: VILLAIN_GREEN_GOBLIN,
     clues: [
       "Flies on a high-tech bat-shaped glider and hurls explosive pumpkin bombs!",
       "Billionaire industrialist CEO of Oscorp and father to Peter's friend Harry!",
@@ -140,7 +149,7 @@ export const rogueDossiers: RogueDossier[] = [
     id: 'doc_ock',
     alias: 'Doctor Octopus',
     realName: 'Otto Octavius',
-    image: 'https://images.unsplash.com/photo-1568602471122-7832951cc4c5?w=600&auto=format&fit=crop&q=80',
+    image: VILLAIN_DOC_OCK,
     clues: [
       "Brilliant nuclear physicist fused with four titanium-steel mechanical tentacles!",
       "Mastermind founder and recurring leader of the notorious Sinister Six!",
@@ -159,7 +168,7 @@ export const rogueDossiers: RogueDossier[] = [
     id: 'venom',
     alias: 'Venom',
     realName: 'Eddie Brock',
-    image: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop&q=80',
+    image: VILLAIN_VENOM,
     clues: [
       "Disgraced Daily Globe journalist who blamed Spider-Man for ruining his career!",
       "Bonded with an alien Klyntar symbiote that Peter rejected with church bells!",
@@ -181,7 +190,7 @@ export const whoSaidItQuestions: WhoSaidItQuestion[] = [
     id: 1,
     quote: "With great power there must also come — great responsibility!",
     character: "Uncle Ben (Narrator / Benjamin Parker)",
-    characterImage: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&auto=format&fit=crop&q=80",
+    characterImage: CHAR_UNCLE_BEN,
     options: ["Uncle Ben (Narrator)", "J. Jonah Jameson", "Tony Stark", "Doctor Strange"],
     correctIndex: 0,
     comicContext: "Often misattributed solely to Ben Parker's dialogue in movies, the famous line first appeared in the narrative caption of Amazing Fantasy #15 written by Stan Lee!",
@@ -191,7 +200,7 @@ export const whoSaidItQuestions: WhoSaidItQuestion[] = [
     id: 2,
     quote: "Face it, Tiger... you just hit the jackpot!",
     character: "Mary Jane Watson",
-    characterImage: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80",
+    characterImage: CHAR_MARY_JANE,
     options: ["Gwen Stacy", "Mary Jane Watson", "Black Cat (Felicia Hardy)", "Betty Brant"],
     correctIndex: 1,
     comicContext: "After months of Peter dodging Aunt May's blind dates expecting an uncool girl, Mary Jane Watson made her legendary door appearance in Amazing Spider-Man #42!",
@@ -201,7 +210,7 @@ export const whoSaidItQuestions: WhoSaidItQuestion[] = [
     id: 3,
     quote: "Anyone can wear the mask. You could wear the mask. If you didn't know that before, I hope you do now.",
     character: "Miles Morales",
-    characterImage: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=600&auto=format&fit=crop&q=80",
+    characterImage: CHAR_MILES_1610,
     options: ["Peter B. Parker", "Miles Morales", "Miguel O'Hara", "Spider-Ham"],
     correctIndex: 1,
     comicContext: "The crowning thematic statement of Into the Spider-Verse, emphasizing that heroism is not defined by heritage or luck, but by courage and compassion!",
@@ -211,7 +220,7 @@ export const whoSaidItQuestions: WhoSaidItQuestion[] = [
     id: 4,
     quote: "He doesn't want to be famous? Then why does he wear a mask?! He's a menace! PARKER, GET ME PICTURES!",
     character: "J. Jonah Jameson",
-    characterImage: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&auto=format&fit=crop&q=80",
+    characterImage: CHAR_JJ_JAMESON,
     options: ["Robbie Robertson", "J. Jonah Jameson", "Norman Osborn", "George Stacy"],
     correctIndex: 1,
     comicContext: "The cigar-chomping publisher of The Daily Bugle who constantly brands Spider-Man a public menace while buying front-page photos exclusively from Peter Parker!",

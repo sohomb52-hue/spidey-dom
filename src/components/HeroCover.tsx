@@ -2,8 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { playSound } from '../utils/audio';
 import { LikeButton } from './common/LikeButton';
 import { ComicTiltCard } from './ComicTiltCard';
-import { Gamepad2, Target, Users, Sparkles, Radio } from 'lucide-react';
+import { Gamepad2, Target, Users, Sparkles, Radio, Play, ArrowRight } from 'lucide-react';
 import { WebPageId } from '../types';
+import {
+  GAME_THUMB_WEB_THROWER,
+  GAME_THUMB_SPIDER_ID,
+  GAME_THUMB_FACT_ATTACK
+} from '../data/spiderArtAssets';
 
 interface HeroCoverProps {
   onStartAdventure: (e: React.MouseEvent) => void;
@@ -177,72 +182,165 @@ export const HeroCover: React.FC<HeroCoverProps> = ({ onStartAdventure, onNaviga
         <LikeButton id="hero-skyline" initialLikes={1962} label="LIKE THIS SKYLINE" />
       </div>
 
-      {/* 3 Quick Game Launch Cards Highlight with Mouse-Tracking 3D Tilt */}
+      {/* 3 Quick Game Launch Cards with High-Quality Distinct Comic-Style Action Thumbnails */}
       {onNavigatePage && (
-        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <ComicTiltCard maxTilt={10} scaleOnHover={1.03}>
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Card 1: Web Thrower 3D (Rooftop Action Shot) */}
+          <ComicTiltCard maxTilt={10} scaleOnHover={1.03} className="h-full">
             <div
-              onClick={() => onNavigatePage('web_thrower')}
-              className="cursor-pointer bg-white hover:bg-[#fff0f0] border-3 border-[#1b1b20] p-3 ink-shadow-sm hover:ink-shadow-red flex items-center justify-between ink-btn group h-full transition-shadow duration-200"
+              onClick={() => {
+                playSound('thwip');
+                onNavigatePage('web_thrower');
+              }}
+              className="cursor-pointer bg-white hover:bg-[#fff0f0] border-4 border-[#1b1b20] depth-shadow-comic flex flex-col justify-between ink-btn group h-full transition-all duration-200 overflow-hidden"
             >
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 bg-[#dc2626] text-white flex items-center justify-center font-comic font-black text-lg border border-[#1b1b20]">
-                  🎯
-                </div>
-                <div>
-                  <span className="font-comic text-[10px] font-black text-[#dc2626] uppercase block">
-                    NEW GAME #01
+              <div>
+                {/* Comic Card Header Badge */}
+                <div className="bg-[#dc2626] text-white px-3 py-1 flex items-center justify-between border-b-2 border-[#1b1b20]">
+                  <span className="font-comic text-[10px] font-black uppercase tracking-wider">
+                    GAME #01 • 3D ROOFTOP ACTION
                   </span>
-                  <span className="font-comic text-sm font-black uppercase text-[#1b1b20] group-hover:text-[#dc2626]">
+                  <span className="bg-[#1b1b20] text-[#facc15] font-comic text-[9px] font-black px-1.5 py-0.2 border border-white/40">
+                    MEDIUM
+                  </span>
+                </div>
+
+                {/* Rooftop Target Action Shot Visual */}
+                <div className="relative h-32 sm:h-36 overflow-hidden border-b-3 border-[#1b1b20] bg-black">
+                  <img
+                    src={GAME_THUMB_WEB_THROWER}
+                    alt="Web Thrower 3D Rooftop Target Action"
+                    className="w-full h-full object-cover filter contrast-105 group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <div className="absolute bottom-2 left-2 bg-[#1b1b20]/90 text-white font-comic text-[10px] font-black px-2 py-0.5 border border-white/30">
+                    ROOFTOP TARGET SHOOTER
+                  </div>
+                </div>
+
+                {/* Card Info */}
+                <div className="p-3">
+                  <h4 className="font-comic text-base sm:text-lg font-black uppercase text-[#1b1b20] group-hover:text-[#dc2626] leading-tight">
                     WEB THROWER 3D
-                  </span>
+                  </h4>
+                  <p className="font-comic text-xs text-[#5b403d] font-bold mt-1 line-clamp-2">
+                    Sling pressurized webs at flying Green Goblin gliders over NYC rooftops in 3D!
+                  </p>
                 </div>
               </div>
-              <span className="font-comic text-xs font-black text-[#dc2626]">PLAY →</span>
+
+              {/* Card Footer with CTA & Like Button */}
+              <div className="p-2.5 bg-[#fbf8f2] border-t-2 border-[#1b1b20] flex items-center justify-between">
+                <LikeButton id="cover-web-thrower" initialLikes={940} label="LIKE" compact />
+                <span className="font-comic text-xs font-black text-[#dc2626] flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                  PLAY GAME <ArrowRight className="w-3.5 h-3.5" />
+                </span>
+              </div>
             </div>
           </ComicTiltCard>
 
-          <ComicTiltCard maxTilt={10} scaleOnHover={1.03}>
+          {/* Card 2: Multiverse Identi-Match (Character Detective Lineup) */}
+          <ComicTiltCard maxTilt={10} scaleOnHover={1.03} className="h-full">
             <div
-              onClick={() => onNavigatePage('spider_id')}
-              className="cursor-pointer bg-white hover:bg-[#fff0f0] border-3 border-[#1b1b20] p-3 ink-shadow-sm hover:ink-shadow-red flex items-center justify-between ink-btn group h-full transition-shadow duration-200"
+              onClick={() => {
+                playSound('thwip');
+                onNavigatePage('spider_id');
+              }}
+              className="cursor-pointer bg-white hover:bg-[#fff0f0] border-4 border-[#1b1b20] depth-shadow-comic flex flex-col justify-between ink-btn group h-full transition-all duration-200 overflow-hidden"
             >
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 bg-[#006398] text-white flex items-center justify-center font-comic font-black text-lg border border-[#1b1b20]">
-                  👥
-                </div>
-                <div>
-                  <span className="font-comic text-[10px] font-black text-[#006398] uppercase block">
-                    NEW GAME #02
+              <div>
+                {/* Header Badge */}
+                <div className="bg-[#0284c7] text-white px-3 py-1 flex items-center justify-between border-b-2 border-[#1b1b20]">
+                  <span className="font-comic text-[10px] font-black uppercase tracking-wider">
+                    GAME #02 • CHARACTER DETECTIVE
                   </span>
-                  <span className="font-comic text-sm font-black uppercase text-[#1b1b20] group-hover:text-[#dc2626]">
+                  <span className="bg-[#1b1b20] text-[#38bdf8] font-comic text-[9px] font-black px-1.5 py-0.2 border border-white/40">
+                    HARD
+                  </span>
+                </div>
+
+                {/* Character Detective Lineup Visual */}
+                <div className="relative h-32 sm:h-36 overflow-hidden border-b-3 border-[#1b1b20] bg-black">
+                  <img
+                    src={GAME_THUMB_SPIDER_ID}
+                    alt="Multiverse Identi-Match Lineup"
+                    className="w-full h-full object-cover filter contrast-105 group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <div className="absolute bottom-2 left-2 bg-[#1b1b20]/90 text-white font-comic text-[10px] font-black px-2 py-0.5 border border-white/30">
+                    MULTIVERSE VARIANTS
+                  </div>
+                </div>
+
+                {/* Card Info */}
+                <div className="p-3">
+                  <h4 className="font-comic text-base sm:text-lg font-black uppercase text-[#1b1b20] group-hover:text-[#0284c7] leading-tight">
                     IDENTIFY SPIDERS
-                  </span>
+                  </h4>
+                  <p className="font-comic text-xs text-[#5b403d] font-bold mt-1 line-clamp-2">
+                    Test your Spider-Sense by matching multiverse heroes from Earth-616 to 2099!
+                  </p>
                 </div>
               </div>
-              <span className="font-comic text-xs font-black text-[#006398]">PLAY →</span>
+
+              {/* Card Footer */}
+              <div className="p-2.5 bg-[#fbf8f2] border-t-2 border-[#1b1b20] flex items-center justify-between">
+                <LikeButton id="cover-spider-id" initialLikes={780} label="LIKE" compact />
+                <span className="font-comic text-xs font-black text-[#0284c7] flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                  PLAY GAME <ArrowRight className="w-3.5 h-3.5" />
+                </span>
+              </div>
             </div>
           </ComicTiltCard>
 
-          <ComicTiltCard maxTilt={10} scaleOnHover={1.03}>
+          {/* Card 3: Arcade Hub / Fact Attack (Comic Battle Starburst) */}
+          <ComicTiltCard maxTilt={10} scaleOnHover={1.03} className="h-full">
             <div
-              onClick={() => onNavigatePage('arcade')}
-              className="cursor-pointer bg-[#dc2626] hover:bg-[#b8121d] text-white border-3 border-[#1b1b20] p-3 ink-shadow-sm hover:ink-shadow-red flex items-center justify-between ink-btn group h-full transition-shadow duration-200"
+              onClick={() => {
+                playSound('thwip');
+                onNavigatePage('arcade');
+              }}
+              className="cursor-pointer bg-white hover:bg-[#fff0f0] border-4 border-[#1b1b20] depth-shadow-comic flex flex-col justify-between ink-btn group h-full transition-all duration-200 overflow-hidden"
             >
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 bg-white text-[#dc2626] flex items-center justify-center font-comic font-black text-lg border border-[#1b1b20]">
-                  🕹️
+              <div>
+                {/* Header Badge */}
+                <div className="bg-[#1b1b20] text-white px-3 py-1 flex items-center justify-between border-b-2 border-[#1b1b20]">
+                  <span className="font-comic text-[10px] font-black uppercase text-[#facc15] tracking-wider">
+                    ARCADE HUB • 6 MINI-GAMES
+                  </span>
+                  <span className="bg-[#dc2626] text-white font-comic text-[9px] font-black px-1.5 py-0.2 border border-white/40">
+                    ALL MODES
+                  </span>
                 </div>
-                <div>
-                  <span className="font-comic text-[10px] font-black text-[#f9bd22] uppercase block">
-                    ARCADE HUB
-                  </span>
-                  <span className="font-comic text-sm font-black uppercase text-white">
-                    ALL 6 GAMES
-                  </span>
+
+                {/* Comic Battle Starburst Visual */}
+                <div className="relative h-32 sm:h-36 overflow-hidden border-b-3 border-[#1b1b20] bg-black">
+                  <img
+                    src={GAME_THUMB_FACT_ATTACK}
+                    alt="Spider-Verse Arcade Hub"
+                    className="w-full h-full object-cover filter contrast-105 group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <div className="absolute bottom-2 left-2 bg-[#1b1b20]/90 text-[#facc15] font-comic text-[10px] font-black px-2 py-0.5 border border-white/30">
+                    6 PLAYABLE MINI-GAMES
+                  </div>
+                </div>
+
+                {/* Card Info */}
+                <div className="p-3">
+                  <h4 className="font-comic text-base sm:text-lg font-black uppercase text-[#1b1b20] group-hover:text-[#dc2626] leading-tight">
+                    ARCADE CABINET
+                  </h4>
+                  <p className="font-comic text-xs text-[#5b403d] font-bold mt-1 line-clamp-2">
+                    Enter the full arcade: Fact Attack, Web of Knowledge, Quotes & Speed Reflex!
+                  </p>
                 </div>
               </div>
-              <span className="font-comic text-xs font-black text-[#f9bd22]">ENTER →</span>
+
+              {/* Card Footer */}
+              <div className="p-2.5 bg-[#fbf8f2] border-t-2 border-[#1b1b20] flex items-center justify-between">
+                <LikeButton id="cover-arcade-hub" initialLikes={1250} label="LIKE" compact />
+                <span className="font-comic text-xs font-black text-[#dc2626] flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                  ALL GAMES <ArrowRight className="w-3.5 h-3.5" />
+                </span>
+              </div>
             </div>
           </ComicTiltCard>
         </div>

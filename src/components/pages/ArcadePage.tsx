@@ -31,7 +31,7 @@ export const ArcadePage: React.FC<ArcadePageProps> = ({
                 THE SPIDER-ARCADE
               </span>
               <span className="bg-white text-[#dc2626] font-comic text-xs font-black px-2 py-0.5 uppercase">
-                6 MULTIVERSE MINI-GAMES
+                {arcadeGamesList.length} MULTIVERSE ARCADE GAMES
               </span>
             </div>
             <h1 className="font-comic text-3xl sm:text-4xl md:text-5xl font-black uppercase text-white tracking-wide leading-none">
@@ -52,7 +52,7 @@ export const ArcadePage: React.FC<ArcadePageProps> = ({
             </span>
             <div className="mt-2 pt-2 border-t border-white/20 flex justify-between text-xs font-comic text-white/90">
               <span>STREAK: <span className="text-[#f9bd22]">🔥 {streak}</span></span>
-              <span>GAMES: <span className="text-white font-bold">6 / 6</span></span>
+              <span>GAMES: <span className="text-white font-bold">{arcadeGamesList.length} / {arcadeGamesList.length}</span></span>
             </div>
           </div>
         </div>

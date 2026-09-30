@@ -36,9 +36,17 @@ import { NotFoundComicPage } from './components/pages/NotFoundComicPage';
 import { ComicFeedbackToast, ComicToast } from './components/common/ComicFeedbackToast';
 import { WebThrowerGame } from './components/games/WebThrowerGame';
 import { SpiderIdGame } from './components/games/SpiderIdGame';
+import { WebSwingGame } from './components/games/WebSwingGame';
+import { SpiderSenseGame } from './components/games/SpiderSenseGame';
 import { ComicTiltCard } from './components/ComicTiltCard';
+import {
+  GAME_THUMB_WEB_THROWER,
+  GAME_THUMB_SPIDER_ID,
+  GAME_THUMB_FACT_ATTACK
+} from './data/spiderArtAssets';
 import { RealStoryModal } from './components/RealStoryModal';
 import { SpideyTipDrawer } from './components/SpideyTipDrawer';
+import { SpideyChatDrawer } from './components/chat/SpideyChatDrawer';
 import { WebCanvas } from './components/WebCanvas';
 import { CinematicIntro } from './components/CinematicIntro';
 import { ComicStartTransition } from './components/ComicStartTransition';
@@ -60,8 +68,8 @@ const pageMeta: Record<WebPageId, { title: string; desc: string }> = {
     desc: 'Enter the Spider-Verse with your secret identity to save score, streak, XP, and comic discoveries to Cloud Firestore.'
   },
   arcade: {
-    title: 'Spider-Verse: Arcade & Challenges — 6 Playable Mini-Games',
-    desc: 'Play 6 interactive Spider-Man mini-games: Web Thrower 3D, Identify Spiders, Fact Attack, Speed Reflexes, and more.'
+    title: 'Spider-Verse: Arcade & Challenges — 8 Playable Mini-Games',
+    desc: 'Play 8 interactive Spider-Man mini-games: Web Swing, Spider-Sense Reflex, Web Thrower 3D, Identify Spiders, Fact Attack, and more.'
   },
   web_thrower: {
     title: 'Spider-Verse: 3D Web Thrower Arena | Rooftop Defense',
@@ -71,13 +79,21 @@ const pageMeta: Record<WebPageId, { title: string; desc: string }> = {
     title: 'Spider-Verse: Identify The Hero | Multiverse Variants',
     desc: 'Test your Spider-Sense by matching multiverse heroes from Earth-616 to Earth-928.'
   },
+  web_swing: {
+    title: 'Spider-Verse: Web Swing | Endless Rooftop Swinger',
+    desc: 'How long can you stay in the air? Master physics web swinging, dodge obstacles, and collect tokens across the Manhattan skyline.'
+  },
+  spider_sense_reaction: {
+    title: 'Spider-Verse: Spider-Sense | Real-Time Reflex Duel',
+    desc: 'Your reflexes vs the multiverse. React in fractions of a second to evade charging cars, falling debris, pumpkin bombs, and electric bolts.'
+  },
   trivia: {
     title: 'Spider-Verse: Challenges & Trivia | Multiverse Canon',
     desc: 'Face authentic comic trivia challenges, quote detectives, and rapid-fire Spider-Sense speed tests.'
   },
   canon: {
-    title: 'Spider-Verse: Comic Canon Archives | Marvel History',
-    desc: 'Explore the complete verified comic history from Amazing Fantasy #15 through modern multiverse crossover events.'
+    title: 'Spider-Verse: Canon Archives — The Facts Behind the Mask',
+    desc: 'Explore the secret archive of classified Spider-Man comic canon events presented as interactive case files with verified continuity and creator insights.'
   },
   vault: {
     title: 'Spider-Verse: Achievements & Badges Vault',
@@ -142,6 +158,9 @@ export default function App() {
 
   // Bot Guide / Tip drawer
   const [tipDrawerOpen, setTipDrawerOpen] = useState<boolean>(false);
+
+  // Spidey AI Fact Checker Chatbot state
+  const [spideyChatOpen, setSpideyChatOpen] = useState<boolean>(false);
 
   // Firebase Multiverse Persistent State (Cloud Firestore & Auth)
   const {
@@ -221,6 +240,8 @@ export default function App() {
         'arcade',
         'web_thrower',
         'spider_id',
+        'web_swing',
+        'spider_sense_reaction',
         'trivia',
         'canon',
         'vault',
@@ -571,6 +592,10 @@ export default function App() {
             playSound('click');
             setTipDrawerOpen(true);
           }}
+          onOpenSpideyChat={() => {
+            playSound('thwip');
+            setSpideyChatOpen(true);
+          }}
         />
       }
       hud={
@@ -674,7 +699,7 @@ export default function App() {
                       </div>
                       <div className="h-32 bg-black border-2 border-[#1b1b20] overflow-hidden mb-2 relative">
                         <img
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuBscJXRK3PQxN14y7ZBa1HeEaeJRivX4LKWY0Ibqt4SLEc47fjTssLmWcgB8nRfEs5MlZLLlpioR8yVyrBKCqXaIJpydiDP0fO9ukdl2-_V95w5kfbLtXTQ8uaWCLjKubu0o_Esu-lk57P7BXM3JoWYUIg4ildlwySRBvjLN-d7T9i120roNbYcyNQUK93Q3jRF24wvFBIoE17uFrubqnzGr8fAc6-oa-t-NmYbb_I1Hvj_vWU-Rw4"
+                          src={GAME_THUMB_WEB_THROWER}
                           alt="Web Thrower 3D"
                           loading="lazy"
                           decoding="async"
@@ -716,16 +741,11 @@ export default function App() {
                       </div>
                       <div className="h-32 bg-black border-2 border-[#1b1b20] overflow-hidden mb-2 relative">
                         <img
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuDFk5sX611T905P2P_E7h8566Q-8Fk_x2y8M5N5kG70kR8Q7H7P5uP-8yJ3k_mQ_7H0k8F4P8H407"
+                          src={GAME_THUMB_SPIDER_ID}
                           alt="Identify Spider-Man Characters"
                           loading="lazy"
                           decoding="async"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                          onError={(e) => {
-                            // Fallback comic asset
-                            (e.target as HTMLImageElement).src =
-                              'https://lh3.googleusercontent.com/aida-public/AB6AXuBscJXRK3PQxN14y7ZBa1HeEaeJRivX4LKWY0Ibqt4SLEc47fjTssLmWcgB8nRfEs5MlZLLlpioR8yVyrBKCqXaIJpydiDP0fO9ukdl2-_V95w5kfbLtXTQ8uaWCLjKubu0o_Esu-lk57P7BXM3JoWYUIg4ildlwySRBvjLN-d7T9i120roNbYcyNQUK93Q3jRF24wvFBIoE17uFrubqnzGr8fAc6-oa-t-NmYbb_I1Hvj_vWU-Rw4';
-                          }}
                         />
                         <div className="comic-halftone absolute inset-0 pointer-events-none" />
                       </div>
@@ -763,15 +783,11 @@ export default function App() {
                       </div>
                       <div className="h-32 bg-black border-2 border-[#1b1b20] overflow-hidden mb-2 relative">
                         <img
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_s1f4y1M7J09k0M0u7B5N5kG70kR8Q7H7P5uP-8yJ3k_mQ_7H0k8F4P8H407"
+                          src={GAME_THUMB_FACT_ATTACK}
                           alt="Fact Attack Trivia"
                           loading="lazy"
                           decoding="async"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              'https://lh3.googleusercontent.com/aida-public/AB6AXuBscJXRK3PQxN14y7ZBa1HeEaeJRivX4LKWY0Ibqt4SLEc47fjTssLmWcgB8nRfEs5MlZLLlpioR8yVyrBKCqXaIJpydiDP0fO9ukdl2-_V95w5kfbLtXTQ8uaWCLjKubu0o_Esu-lk57P7BXM3JoWYUIg4ildlwySRBvjLN-d7T9i120roNbYcyNQUK93Q3jRF24wvFBIoE17uFrubqnzGr8fAc6-oa-t-NmYbb_I1Hvj_vWU-Rw4';
-                          }}
                         />
                         <div className="comic-halftone absolute inset-0 pointer-events-none" />
                       </div>
@@ -817,6 +833,22 @@ export default function App() {
         {/* PAGE 4: IDENTIFY SPIDER-MAN CHARACTERS GAME */}
         {currentPage === 'spider_id' && (
           <SpiderIdGame
+            onBackToArcade={() => navigateToPage('arcade')}
+            onAddScore={handleAddScore}
+          />
+        )}
+
+        {/* PAGE: WEB SWING GAME */}
+        {currentPage === 'web_swing' && (
+          <WebSwingGame
+            onBackToArcade={() => navigateToPage('arcade')}
+            onAddScore={handleAddScore}
+          />
+        )}
+
+        {/* PAGE: SPIDER-SENSE REFLEX GAME */}
+        {currentPage === 'spider_sense_reaction' && (
+          <SpiderSenseGame
             onBackToArcade={() => navigateToPage('arcade')}
             onAddScore={handleAddScore}
           />
@@ -893,7 +925,7 @@ export default function App() {
 
         {/* PAGE 6: COMIC CANON */}
         {currentPage === 'canon' && (
-          <ComicCanonMode onTriggerWeb={triggerWebFX} />
+          <ComicCanonMode onTriggerWeb={triggerWebFX} onNavigatePage={navigateToPage} />
         )}
 
         {/* PAGE 7: BADGES VAULT */}
@@ -976,6 +1008,14 @@ export default function App() {
         isOpen={tipDrawerOpen}
         onClose={() => setTipDrawerOpen(false)}
         onOpen={() => setTipDrawerOpen(true)}
+      />
+
+      {/* Floating Spidey AI Fact Checker Chatbot */}
+      <SpideyChatDrawer
+        isOpen={spideyChatOpen}
+        onClose={() => setSpideyChatOpen(false)}
+        onOpen={() => setSpideyChatOpen(true)}
+        onNavigatePage={navigateToPage}
       />
 
       {/* Persistent Navigation About & Contact Modals */}
