@@ -28,7 +28,7 @@ app.use((_req, res, next) => {
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Helper to retrieve the active Gemini API key from environment variables
+// Helper to retrieve the active Gemini API key from environment variables (backend only)
 function getGeminiApiKey(): string | undefined {
   return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
 }
@@ -43,69 +43,57 @@ function getGeminiClient(): GoogleGenAI | null {
     apiKey: key.trim(),
     httpOptions: {
       headers: {
-        'User-Agent': 'spiderverse-fact-attack/1.0.0',
+        'User-Agent': 'spiderverse-fact-attack/2.0.0',
       },
     },
   });
 }
 
-const SPIDEY_SYSTEM_INSTRUCTION = `
-You are SPIDEY, an AI companion inside the SPIDER-VERSE FACT ATTACK website.
+const DEFAULT_SPIDEY_SYSTEM_INSTRUCTION = `
+You are SPIDEY, an expert Spider-Verse AI companion and assistant with live Google Search Grounding capabilities inside the SPIDER-VERSE FACT ATTACK web application.
 
-You are inspired by the witty, playful and sarcastic personality associated with Spider-Man, but you are an AI assistant and should not claim to literally be the fictional character.
+You are inspired by the witty, playful, and sharp personality associated with Spider-Man, but you are a capable AI assistant with real-time web knowledge.
 
-Your job is to have natural, engaging conversations with users about Spider-Man lore, trivia, the website, and general topics.
+CAPABILITIES:
+1. Live Web Grounding: You have access to real-time Google Search to look up current information, breaking news, box office data, latest comic releases, MCU updates, weather, and real-world facts.
+2. Spider-Man & Comic Lore: Earth-616, Ultimate Universe (Earth-1610 / Earth-6160), Earth-65 (Ghost-Spider), Spider-Man 2099, Spider-Noir, Spider-Punk, Rogues Gallery, and crossover events.
+3. Spider-Verse Fact Attack Website: Help users navigate Arcade games (Web Swing, Spider-Sense Reaction, Web Thrower), Canon Archives, Badges Vault, and Trivia modes.
+4. General Knowledge: Answer science, technology, pop culture, math, and everyday queries accurately with high-precision information and your signature witty comic flair.
 
-You can discuss:
-- Spider-Man comics (Earth-616, Ultimate Universe Earth-1610, Earth-6160, Earth-65 Spider-Gwen, 2099, Noir, Spider-Punk, Spider-Ham, etc.)
-- Characters, rogues gallery (Green Goblin, Doc Ock, Venom, Carnage, Kingpin, Kraven, Mysterio, etc.)
-- Storylines, canon, crossovers (Secret Wars, Spider-Verse, Clone Saga, Kraven's Last Hunt, Maximum Carnage)
-- Movies (Raimi trilogy, Webb films, MCU Spider-Man, Spider-Verse animated films)
-- Video games (Insomniac Earth-1048, classic arcade)
-- Alternate universes and multiverse lore
-- The SPIDER-VERSE FACT ATTACK website, its Arcade games, and Canon Archives
-- User progress, streaks, XP, and badges when provided in context
-- General knowledge questions (math, science, everyday questions, jokes) with your signature witty comic flair
-
-PERSONALITY & TONE:
-- Witty, friendly, clever, playful, conversational, and occasionally sarcastic.
-- Helpful and enthusiastic about comic lore.
-- Concise when appropriate (1–3 paragraphs), detailed when the user asks for in-depth explanation.
-- Do NOT force a Spider-Man pun into every sentence; use humor naturally.
-
-CONVERSATION & FOLLOW-UP CONTINUITY:
-- Maintain context across follow-up questions (e.g. if the user asked about Venom and follows up with "What about Eddie?", understand that they mean Eddie Brock and his bond with the symbiote).
-- Understand single-word queries ("Why?", "Explain", "Who?", "Really?") by analyzing previous messages.
-- Respond naturally to general queries:
-  * "Hey" / "Hello" -> Greet warmly with a friendly neighborhood greeting.
-  * "What is 2+2?" -> "4! Even without spider-powers, the math checks out."
-  * "Tell me something funny" -> Share a witty quip or amusing comic book moment.
-  * "I'm bored" -> Suggest a challenge in the Arcade (Web Swing or Spider-Sense Reaction) or Canon Archives.
-  * "Give me a difficult Spider-Man question" -> Present a genuine, deep-cut comic trivia question.
-
-CANON DISCIPLINE:
-- Distinguish clearly between Marvel Comics 616 continuity, movie continuities, and alternate universes.
-- If a detail is continuity-specific or disputed, mention which universe or run it comes from.
-- Never invent fake issue numbers or non-existent storylines.
+TONE & CITATION BEHAVIOR:
+- Witty, friendly, enthusiastic, and helpful.
+- Accurate and grounded: when answering questions about current events, latest media, or specific trivia, synthesize search results seamlessly.
+- Concise by default (1–3 paragraphs), detailed when the user requests in-depth analysis.
 `;
 
-// Helper: Call Gemini with robust multi-model fallback and retry cascade
-async function generateSpideyResponse(
+export interface GroundingSource {
+  title: string;
+  url: string;
+}
+
+export interface GeminiChatResponse {
+  reply: string;
+  sources: GroundingSource[];
+  searchQueries: string[];
+  source: 'gemini';
+}
+
+// Helper: Call Gemini with Google Search Grounding and multi-model fallback cascade
+async function generateGroundedResponse(
   contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>,
   systemInstruction: string
-): Promise<string> {
+): Promise<GeminiChatResponse> {
   const client = getGeminiClient();
   if (!client) {
     throw new Error('GEMINI_API_KEY is not configured on the server.');
   }
 
-  // Model cascade: try fast and widely available Gemini models
+  // Primary model is gemini-2.5-flash with search grounding; fallbacks in cascade
   const modelsToTry = [
     'gemini-2.5-flash',
     'gemini-3.7-flash',
-    'gemini-3.1-flash-lite',
-    'gemini-2.5-pro',
     'gemini-flash-latest',
+    'gemini-3.1-flash-lite',
   ];
   let lastError: any = null;
 
@@ -116,32 +104,67 @@ async function generateSpideyResponse(
         contents,
         config: {
           systemInstruction,
-          temperature: 0.75,
+          temperature: 0.7,
           topP: 0.95,
+          tools: [{ googleSearch: {} }],
         },
       });
 
       const text = response.text;
       if (text && typeof text === 'string' && text.trim()) {
-        return text.trim();
+        const candidate = response.candidates?.[0];
+        const groundingMetadata = candidate?.groundingMetadata;
+
+        const searchQueries: string[] = groundingMetadata?.webSearchQueries || [];
+        const sources: GroundingSource[] = [];
+        const seenUrls = new Set<string>();
+
+        if (groundingMetadata?.groundingChunks && Array.isArray(groundingMetadata.groundingChunks)) {
+          for (const chunk of groundingMetadata.groundingChunks) {
+            const web = chunk.web;
+            if (web && web.uri) {
+              const url = String(web.uri).trim();
+              if (url && !seenUrls.has(url)) {
+                seenUrls.add(url);
+                sources.push({
+                  title: (web.title && String(web.title).trim()) || url,
+                  url,
+                });
+              }
+            }
+          }
+        }
+
+        return {
+          reply: text.trim(),
+          sources,
+          searchQueries,
+          source: 'gemini',
+        };
       }
     } catch (err: any) {
-      console.warn(`[Gemini API] Model ${model} failed, attempting next model in cascade:`, err?.message || err);
+      console.warn(`[Gemini API] Model ${model} with Google Search Grounding encountered an issue, trying next in cascade:`, err?.message || err);
       lastError = err;
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 200));
     }
   }
 
   throw lastError || new Error('All Gemini model candidates failed to return a response.');
 }
 
-// Spidey Chat API Endpoint: Pure dynamic Gemini AI conversation
+// Full-Stack AI Chatbot API Endpoint with Live Google Search Grounding
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, history, userStats } = req.body;
+    const { message, history, systemInstruction, userStats } = req.body;
 
+    // 1. Input Validation & Sanitization
     if (!message || typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ error: 'A non-empty message string is required.' });
+    }
+
+    const trimmedMessage = message.trim();
+    if (trimmedMessage.length > 4000) {
+      return res.status(400).json({ error: 'Message exceeds the 4,000 character maximum limit.' });
     }
 
     const apiKey = getGeminiApiKey();
@@ -153,7 +176,7 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
-    // Sanitize and build conversational turn history (alternating user/model)
+    // 2. Sanitize and build conversational turn history (alternating user/model)
     const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
 
     if (Array.isArray(history)) {
@@ -162,16 +185,15 @@ app.post('/api/chat', async (req, res) => {
           const role = item.role === 'user' ? 'user' : 'model';
           const text = String(item.parts[0].text).trim();
           if (text) {
-            // Avoid duplicate consecutive roles
             if (contents.length > 0 && contents[contents.length - 1].role === role) {
               contents[contents.length - 1].parts[0].text += `\n${text}`;
             } else {
               contents.push({ role, parts: [{ text }] });
             }
           }
-        } else if (item && item.sender && item.text) {
-          const role = item.sender === 'user' ? 'user' : 'model';
-          const text = String(item.text).trim();
+        } else if (item && (item.role || item.sender) && (item.text || item.content)) {
+          const role = (item.role === 'user' || item.sender === 'user') ? 'user' : 'model';
+          const text = String(item.text || item.content || '').trim();
           if (text) {
             if (contents.length > 0 && contents[contents.length - 1].role === role) {
               contents[contents.length - 1].parts[0].text += `\n${text}`;
@@ -185,27 +207,27 @@ app.post('/api/chat', async (req, res) => {
 
     // Ensure the latest message is added as a user turn
     if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
-      contents[contents.length - 1].parts[0].text += `\n${message.trim()}`;
+      contents[contents.length - 1].parts[0].text += `\n${trimmedMessage}`;
     } else {
       contents.push({
         role: 'user',
-        parts: [{ text: message.trim() }],
+        parts: [{ text: trimmedMessage }],
       });
     }
 
-    // Append user stats to system instruction if provided
-    let dynamicSystemInstruction = SPIDEY_SYSTEM_INSTRUCTION;
+    // 3. Assemble Dynamic System Instruction
+    let finalSystemInstruction = systemInstruction && typeof systemInstruction === 'string'
+      ? `${systemInstruction}\n\n${DEFAULT_SPIDEY_SYSTEM_INSTRUCTION}`
+      : DEFAULT_SPIDEY_SYSTEM_INSTRUCTION;
+
     if (userStats && typeof userStats === 'object') {
-      dynamicSystemInstruction += `\n\nCURRENT USER STATS & PROGRESS ON THE SITE:\n${JSON.stringify(userStats, null, 2)}`;
+      finalSystemInstruction += `\n\nCURRENT USER STATS & PROGRESS ON THE SITE:\n${JSON.stringify(userStats, null, 2)}`;
     }
 
-    // Generate real open-ended AI response via Gemini API
-    const reply = await generateSpideyResponse(contents, dynamicSystemInstruction);
+    // 4. Generate real AI response with live Google Search Grounding
+    const result = await generateGroundedResponse(contents, finalSystemInstruction);
 
-    return res.json({
-      reply,
-      source: 'gemini',
-    });
+    return res.json(result);
   } catch (err: any) {
     console.error('[Spidey API] Error generating Gemini response in /api/chat:', err);
     return res.status(500).json({

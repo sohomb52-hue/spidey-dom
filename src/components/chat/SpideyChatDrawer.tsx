@@ -33,6 +33,8 @@ export interface ChatMessage {
   retryPrompt?: string;
   reaction?: 'thwip' | 'bam' | null;
   richCards?: RichCardPreview[];
+  sources?: Array<{ title: string; url: string }>;
+  searchQueries?: string[];
 }
 
 export interface RichCardPreview {
@@ -329,6 +331,8 @@ export const SpideyChatDrawer: React.FC<SpideyChatDrawerProps> = ({
         text: data.reply,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         richCards: extractRichCards(data.reply),
+        sources: Array.isArray(data.sources) && data.sources.length > 0 ? data.sources : undefined,
+        searchQueries: Array.isArray(data.searchQueries) && data.searchQueries.length > 0 ? data.searchQueries : undefined,
       };
 
       setMessages((prev) => [...prev, spideyMsg]);
@@ -667,6 +671,41 @@ export const SpideyChatDrawer: React.FC<SpideyChatDrawerProps> = ({
                             {paragraph}
                           </p>
                         ))}
+                      </div>
+                    )}
+
+                    {/* Google Search Grounding Queries & Citations */}
+                    {!msg.isError && (msg.searchQueries || msg.sources) && (
+                      <div className="mt-2 pt-2 border-t border-[#1b1b20]/20 space-y-1">
+                        {msg.searchQueries && msg.searchQueries.length > 0 && (
+                          <div className="flex items-center gap-1 text-[9px] font-comic font-black text-[#5b403d] bg-[#fef08a] px-1.5 py-0.5 border border-[#1b1b20]/30">
+                            <span>🔍 SEARCHED:</span>
+                            <span className="italic font-sans text-gray-700">
+                              "{msg.searchQueries.join(', ')}"
+                            </span>
+                          </div>
+                        )}
+
+                        {msg.sources && msg.sources.length > 0 && (
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-comic font-black text-[#0284c7] uppercase block">
+                              🌐 LIVE WEB SOURCES ({msg.sources.length}):
+                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {msg.sources.map((src, idx) => (
+                                <a
+                                  key={idx}
+                                  href={src.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="bg-white hover:bg-[#e0f2fe] border border-[#0284c7]/40 text-[#0369a1] text-[9px] font-sans font-bold px-1.5 py-0.5 flex items-center gap-1 transition-colors truncate max-w-[200px]"
+                                >
+                                  <span className="truncate">{src.title || src.url}</span>
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
