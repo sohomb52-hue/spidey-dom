@@ -16,6 +16,11 @@ export const CinematicIntro: React.FC<CinematicIntroProps> = ({ onEnter }) => {
   const [webShot, setWebShot] = useState(false);
   const [panelStep, setPanelStep] = useState<number>(1);
 
+  useEffect(() => {
+    document.body.classList.add('modal-open');
+    return () => document.body.classList.remove('modal-open');
+  }, []);
+
   // Vertical storytelling beats:
   // Step 1: CALM (City skyline under moonlight)
   // Step 2: SPIDER-MAN ARRIVES (Swinging in, perching with sound effect)

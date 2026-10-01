@@ -27,11 +27,12 @@ export const SpideyTipDrawer: React.FC<SpideyTipDrawerProps> = ({
       {/* Floating Bottom-Right Pill for Lore Tips (stacked above AI Chat) */}
       <div className="fixed bottom-20 right-4 z-40">
         <button
+          type="button"
           onClick={() => {
             playSound('click');
             onOpen();
           }}
-          className="bg-white border-3 border-[#1b1b20] p-1.5 pr-3 rounded-full ink-shadow-md flex items-center gap-2 hover:bg-[#ffdf9f] transition-all ink-btn"
+          className="bg-white border-3 border-[#1b1b20] p-1.5 pr-3 rounded-full ink-shadow-md flex items-center gap-2 hover:bg-[#ffdf9f] transition-all ink-btn touch-manipulation select-none cursor-pointer"
           title="Open Spidey's Multiverse Lore Tips"
         >
           <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">

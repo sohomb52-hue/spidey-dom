@@ -34,7 +34,7 @@ export const ComicEnvironment25D: React.FC<ComicEnvironment25DProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#0d0f18] text-[#1b1b20] relative overflow-x-hidden selection:bg-[#f9bd22] selection:text-[#261a00]">
+    <div className="min-h-screen bg-[#0d0f18] text-[#1b1b20] relative selection:bg-[#f9bd22] selection:text-[#261a00]">
       {/* =========================================================================
           LAYER 1 — BACKGROUND (Deepest Space: Skyline, Moving Clouds, Halftone, Particles)
           ========================================================================= */}

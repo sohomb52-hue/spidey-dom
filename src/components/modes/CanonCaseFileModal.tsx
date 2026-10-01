@@ -42,8 +42,10 @@ export const CanonCaseFileModal: React.FC<CanonCaseFileModalProps> = ({
   const [isWebStamped, setIsWebStamped] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
 
-  // Keyboard navigation
+  // Keyboard navigation & body scroll lock
   useEffect(() => {
+    document.body.classList.add('modal-open');
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         playSound('click');
@@ -57,7 +59,10 @@ export const CanonCaseFileModal: React.FC<CanonCaseFileModalProps> = ({
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.classList.remove('modal-open');
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [onClose, onNext, onPrev]);
 
   // Reset web stamped state when event changes
@@ -89,11 +94,11 @@ export const CanonCaseFileModal: React.FC<CanonCaseFileModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="case-file-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden animate-fadeIn"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-4xl my-auto bg-[#fffdf8] border-4 sm:border-6 border-[#1b1b20] depth-shadow-comic text-[#1b1b20] overflow-hidden"
+        className="relative w-full max-w-4xl max-h-[92vh] flex flex-col my-auto bg-[#fffdf8] border-4 sm:border-6 border-[#1b1b20] depth-shadow-comic text-[#1b1b20] overflow-hidden"
         style={{
           boxShadow: '10px 10px 0px 0px #1b1b20, 18px 18px 0px 0px rgba(220,38,38,0.35)'
         }}

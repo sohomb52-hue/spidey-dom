@@ -23,7 +23,27 @@ export function isSfxMuted(): boolean {
   return sfxMuted;
 }
 
-export function playSound(type: 'thwip' | 'correct' | 'wrong' | 'click' | 'combo' | 'tick' | 'unlock' | 'spider-sense' | 'bam') {
+export type SoundType =
+  | 'thwip'
+  | 'correct'
+  | 'wrong'
+  | 'click'
+  | 'combo'
+  | 'tick'
+  | 'unlock'
+  | 'spider-sense'
+  | 'bam'
+  | 'web_shoot'
+  | 'web_release'
+  | 'token'
+  | 'powerup'
+  | 'slowmo'
+  | 'hit'
+  | 'level_complete'
+  | 'perfect'
+  | 'game_over';
+
+export function playSound(type: SoundType) {
   if (sfxMuted) return;
   try {
     const ctx = getAudioContext();
@@ -35,8 +55,8 @@ export function playSound(type: 'thwip' | 'correct' | 'wrong' | 'click' | 'combo
     osc.connect(gainNode);
     gainNode.connect(ctx.destination);
 
-    if (type === 'thwip') {
-      // Rapid frequency sweep mimicking pressurized web-fluid shot
+    if (type === 'thwip' || type === 'web_shoot') {
+      // Pressurized web-fluid shot sweep
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(950, now);
       osc.frequency.exponentialRampToValueAtTime(120, now + 0.18);
@@ -44,25 +64,43 @@ export function playSound(type: 'thwip' | 'correct' | 'wrong' | 'click' | 'combo
       gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
       osc.start(now);
       osc.stop(now + 0.18);
-    } else if (type === 'correct') {
+    } else if (type === 'web_release') {
+      // Gentle web detachment flutter
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(420, now);
+      osc.frequency.exponentialRampToValueAtTime(780, now + 0.1);
+      gainNode.gain.setValueAtTime(0.18, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+      osc.start(now);
+      osc.stop(now + 0.1);
+    } else if (type === 'token') {
+      // Bright arcade chime
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(987.77, now); // B5
+      osc.frequency.setValueAtTime(1318.51, now + 0.06); // E6
+      gainNode.gain.setValueAtTime(0.2, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.16);
+      osc.start(now);
+      osc.stop(now + 0.16);
+    } else if (type === 'correct' || type === 'perfect') {
       // Heroic triumph triad
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(440, now);
-      osc.frequency.setValueAtTime(659.25, now + 0.08);
-      osc.frequency.setValueAtTime(880, now + 0.16);
+      osc.frequency.setValueAtTime(523.25, now);
+      osc.frequency.setValueAtTime(659.25, now + 0.07);
+      osc.frequency.setValueAtTime(1046.5, now + 0.14);
       gainNode.gain.setValueAtTime(0.25, now);
       gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.28);
       osc.start(now);
       osc.stop(now + 0.28);
-    } else if (type === 'wrong') {
-      // Downward buzz
+    } else if (type === 'wrong' || type === 'hit') {
+      // Downward buzz impact
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(220, now);
-      osc.frequency.exponentialRampToValueAtTime(60, now + 0.26);
+      osc.frequency.exponentialRampToValueAtTime(55, now + 0.24);
       gainNode.gain.setValueAtTime(0.35, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.26);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.24);
       osc.start(now);
-      osc.stop(now + 0.26);
+      osc.stop(now + 0.24);
     } else if (type === 'click') {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(750, now);
@@ -72,14 +110,14 @@ export function playSound(type: 'thwip' | 'correct' | 'wrong' | 'click' | 'combo
       osc.stop(now + 0.05);
     } else if (type === 'combo') {
       osc.type = 'square';
-      osc.frequency.setValueAtTime(523.25, now); // C5
-      osc.frequency.setValueAtTime(659.25, now + 0.07); // E5
-      osc.frequency.setValueAtTime(783.99, now + 0.14); // G5
-      osc.frequency.setValueAtTime(1046.50, now + 0.21); // C6
+      osc.frequency.setValueAtTime(523.25, now);
+      osc.frequency.setValueAtTime(659.25, now + 0.06);
+      osc.frequency.setValueAtTime(783.99, now + 0.12);
+      osc.frequency.setValueAtTime(1046.5, now + 0.18);
       gainNode.gain.setValueAtTime(0.15, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
       osc.start(now);
-      osc.stop(now + 0.35);
+      osc.stop(now + 0.3);
     } else if (type === 'tick') {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(1200, now);
@@ -87,16 +125,17 @@ export function playSound(type: 'thwip' | 'correct' | 'wrong' | 'click' | 'combo
       gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.03);
       osc.start(now);
       osc.stop(now + 0.03);
-    } else if (type === 'unlock') {
+    } else if (type === 'unlock' || type === 'powerup') {
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(587.33, now); // D5
-      osc.frequency.setValueAtTime(880, now + 0.1); // A5
-      osc.frequency.setValueAtTime(1174.66, now + 0.2); // D6
-      gainNode.gain.setValueAtTime(0.3, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.setValueAtTime(554.37, now + 0.08);
+      osc.frequency.setValueAtTime(659.25, now + 0.16);
+      osc.frequency.setValueAtTime(880, now + 0.24);
+      gainNode.gain.setValueAtTime(0.25, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
       osc.start(now);
-      osc.stop(now + 0.45);
-    } else if (type === 'spider-sense') {
+      osc.stop(now + 0.4);
+    } else if (type === 'spider-sense' || type === 'slowmo') {
       // Rapid vibrating electric tingling wave (Ditko radar tingle)
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(880, now);
@@ -109,7 +148,6 @@ export function playSound(type: 'thwip' | 'correct' | 'wrong' | 'click' | 'combo
       osc.start(now);
       osc.stop(now + 0.35);
     } else if (type === 'bam') {
-      // Impact punch explosion thud
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(260, now);
       osc.frequency.exponentialRampToValueAtTime(45, now + 0.25);
@@ -117,6 +155,27 @@ export function playSound(type: 'thwip' | 'correct' | 'wrong' | 'click' | 'combo
       gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
       osc.start(now);
       osc.stop(now + 0.25);
+    } else if (type === 'level_complete') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(523.25, now);
+      osc.frequency.setValueAtTime(659.25, now + 0.1);
+      osc.frequency.setValueAtTime(783.99, now + 0.2);
+      osc.frequency.setValueAtTime(1046.5, now + 0.3);
+      osc.frequency.setValueAtTime(1318.51, now + 0.42);
+      gainNode.gain.setValueAtTime(0.3, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.65);
+      osc.start(now);
+      osc.stop(now + 0.65);
+    } else if (type === 'game_over') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.setValueAtTime(370, now + 0.15);
+      osc.frequency.setValueAtTime(311.13, now + 0.3);
+      osc.frequency.setValueAtTime(220, now + 0.45);
+      gainNode.gain.setValueAtTime(0.3, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.7);
+      osc.start(now);
+      osc.stop(now + 0.7);
     }
   } catch (err) {
     console.debug('Audio error:', err);

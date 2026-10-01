@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { playSound } from '../utils/audio';
 import { Trophy, ArrowRight, Sparkles, X, RotateCcw, BookOpen, Award } from 'lucide-react';
 import { BadgeItem } from '../types';
@@ -33,16 +33,23 @@ export const IssueCompleteModal: React.FC<IssueCompleteModalProps> = ({
   onViewAchievements,
   onClose
 }) => {
+  useEffect(() => {
+    if (isOpen) {
+      document.body.classList.add('modal-open');
+      return () => document.body.classList.remove('modal-open');
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const unlockedBadges = badges.slice(0, 3);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1b1b20]/85 backdrop-blur-xs overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1b1b20]/85 backdrop-blur-xs overflow-hidden">
       {/* Comic Action Speed Lines */}
       <div className="comic-speed-lines absolute inset-0 opacity-40 pointer-events-none" />
 
-      <div className="relative bg-[#fffbf0] border-4 sm:border-6 border-[#1b1b20] max-w-xl w-full p-5 sm:p-7 ink-shadow-red-lg z-10 my-6 -rotate-0.5">
+      <div className="relative bg-[#fffbf0] border-4 sm:border-6 border-[#1b1b20] max-w-xl w-full max-h-[90vh] overflow-y-auto p-5 sm:p-7 ink-shadow-red-lg z-10 my-auto -rotate-0.5">
         {/* Top Comic Header Banner */}
         <div className="flex items-center justify-between border-b-4 border-[#1b1b20] pb-3 mb-4">
           <div className="flex items-center gap-2">

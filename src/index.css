@@ -1,12 +1,56 @@
 @import "tailwindcss";
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    touch-action: manipulation;
+  }
   body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
     font-family: 'Nunito Sans', sans-serif;
+  }
+  body.modal-open {
+    overflow: hidden !important;
+    touch-action: none;
   }
   h1, h2, h3, h4, h5, h6, button, .font-comic {
     font-family: 'Anybody', sans-serif;
   }
+}
+
+/* Touch & Scroll Stability Utilities */
+.touch-scroll-x {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+}
+
+/* Custom Slim Comic Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1b1b20;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #dc2626;
+  border: 1px solid #1b1b20;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #facc15;
 }
 
 /* Halftone & Ben-Day Dots Simulation */
@@ -30,6 +74,10 @@
 }
 
 /* Comic Book Ink Box-Shadows */
+.ink-shadow-xs {
+  box-shadow: 1.5px 1.5px 0px #1b1b20;
+}
+
 .ink-shadow-sm {
   box-shadow: 2px 2px 0px #1b1b20;
 }
@@ -46,6 +94,10 @@
   box-shadow: 8px 8px 0px #1b1b20;
 }
 
+.ink-shadow-2xl {
+  box-shadow: 12px 12px 0px #1b1b20;
+}
+
 .ink-shadow-red {
   box-shadow: 4px 4px 0px #dc2626;
 }
@@ -56,6 +108,10 @@
 
 .ink-shadow-red-multi {
   box-shadow: 3px 3px 0px #dc2626, 6px 6px 0px #1b1b20;
+}
+
+.depth-shadow-comic {
+  box-shadow: 6px 6px 0px 0px #1b1b20;
 }
 
 /* 3D Perspective & Card Transforms */
@@ -100,34 +156,25 @@
 }
 
 .animate-float-3d {
-  animation: float-3d 3.5s ease-in-out infinite;
+  animation: float-3d 4s ease-in-out infinite;
 }
 
-@keyframes pulse-red-glow {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
-  }
-  50% {
-    box-shadow: 0 0 20px 6px rgba(220, 38, 38, 0.3);
-  }
-}
-
-.pulse-red-glow {
-  animation: pulse-red-glow 2s infinite;
-}
-
-/* Mechanical Push Interaction */
+/* Comic Button Hover Feedback */
 .ink-btn {
-  transition: transform 0.1s ease, box-shadow 0.1s ease;
-  cursor: pointer;
+  transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.12s ease;
+}
+
+.ink-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0px #1b1b20;
 }
 
 .ink-btn:active {
-  transform: translate(3px, 3px);
-  box-shadow: 1px 1px 0px #1b1b20 !important;
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0px #1b1b20;
 }
 
-/* Speech Bubble Pointer (Bottom) */
+/* Speech Bubble Tails */
 .bubble-bottom {
   position: relative;
 }
@@ -137,9 +184,9 @@
   position: absolute;
   bottom: -14px;
   left: 36px;
-  border-width: 14px 14px 0;
+  border-width: 14px 14px 0 0;
   border-style: solid;
-  border-color: #1b1b20 transparent;
+  border-color: #fff transparent transparent transparent;
   display: block;
   width: 0;
 }
@@ -147,356 +194,213 @@
 .bubble-bottom::before {
   content: '';
   position: absolute;
-  bottom: -9px;
-  left: 39px;
-  border-width: 11px 11px 0;
+  bottom: -18px;
+  left: 34px;
+  border-width: 16px 16px 0 0;
   border-style: solid;
-  border-color: #ffffff transparent;
-  display: block;
-  width: 0;
-  z-index: 1;
-}
-
-/* Speech Bubble Pointer (Right) */
-.bubble-left {
-  position: relative;
-}
-
-.bubble-left::after {
-  content: '';
-  position: absolute;
-  top: 20px;
-  left: -14px;
-  border-width: 10px 14px 10px 0;
-  border-style: solid;
-  border-color: transparent #1b1b20 transparent transparent;
+  border-color: #1b1b20 transparent transparent transparent;
   display: block;
   width: 0;
 }
 
-.bubble-left::before {
-  content: '';
-  position: absolute;
-  top: 22px;
-  left: -10px;
-  border-width: 8px 11px 8px 0;
-  border-style: solid;
-  border-color: transparent #ffffff transparent transparent;
-  display: block;
-  width: 0;
-  z-index: 1;
+/* Dynamic Comic Speed Lines */
+.comic-speed-lines {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 15px,
+    rgba(220, 38, 38, 0.04) 15px,
+    rgba(220, 38, 38, 0.04) 30px
+  );
 }
 
-/* Comic vibration animation */
-@keyframes comic-shake {
+/* Spider-Sense Screen Shake on Wrong Answer */
+@keyframes screen-shake-comic {
   0%, 100% { transform: translate(0, 0) rotate(0deg); }
-  20% { transform: translate(-4px, 4px) rotate(-1deg); }
-  40% { transform: translate(4px, -3px) rotate(1.5deg); }
-  60% { transform: translate(-3px, 1px) rotate(-1deg); }
-  80% { transform: translate(3px, 3px) rotate(0.5deg); }
+  20% { transform: translate(-6px, 4px) rotate(-1deg); }
+  40% { transform: translate(6px, -4px) rotate(1deg); }
+  60% { transform: translate(-4px, 2px) rotate(-0.5deg); }
+  80% { transform: translate(4px, -2px) rotate(0.5deg); }
 }
 
 .shake-comic {
-  animation: comic-shake 0.35s ease-in-out;
+  animation: screen-shake-comic 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
-/* Spider-Sense Radiance */
-@keyframes sense-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(249, 189, 34, 0.7); }
-  50% { box-shadow: 0 0 0 14px rgba(249, 189, 34, 0); }
-}
-
-.spider-sense-active {
-  animation: sense-pulse 1.2s infinite;
-}
-
-/* Authentic Ditko Spider-Sense Wavy Halo Tingle */
-@keyframes spidey-tingle {
+/* Spider-Sense Radiation Wave Alert */
+@keyframes spider-tingle-pulse {
   0% {
-    filter: drop-shadow(0 0 4px #f9bd22) drop-shadow(0 0 12px #dc2626);
-    transform: scale(1) rotate(0deg);
-  }
-  25% {
-    filter: drop-shadow(0 0 10px #f9bd22) drop-shadow(0 0 20px #ef4444);
-    transform: scale(1.03) rotate(-1deg);
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7), 0 0 0 0 rgba(249, 189, 34, 0.7);
   }
   50% {
-    filter: drop-shadow(0 0 6px #f9bd22) drop-shadow(0 0 14px #dc2626);
-    transform: scale(0.99) rotate(1deg);
-  }
-  75% {
-    filter: drop-shadow(0 0 12px #f9bd22) drop-shadow(0 0 24px #ef4444);
-    transform: scale(1.02) rotate(-0.5deg);
+    box-shadow: 0 0 0 16px rgba(220, 38, 38, 0), 0 0 0 8px rgba(249, 189, 34, 0.4);
   }
   100% {
-    filter: drop-shadow(0 0 4px #f9bd22) drop-shadow(0 0 12px #dc2626);
-    transform: scale(1) rotate(0deg);
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0), 0 0 0 0 rgba(249, 189, 34, 0);
   }
 }
 
 .spidey-tingle-anim {
-  animation: spidey-tingle 0.8s ease-in-out infinite;
-}
-
-/* Comic Action Speed Lines */
-.comic-speed-lines {
-  background: repeating-conic-gradient(
-    from 0deg,
-    rgba(27, 27, 32, 0.08) 0deg 3deg,
-    transparent 3deg 12deg
-  );
-}
-
-.comic-speed-lines-dark {
-  background: repeating-conic-gradient(
-    from 0deg,
-    rgba(255, 255, 255, 0.05) 0deg 2.5deg,
-    transparent 2.5deg 10deg
-  );
+  animation: spider-tingle-pulse 1.6s infinite ease-out;
 }
 
 /* Comic Score Float Burst */
 @keyframes score-burst-rise {
   0% {
-    opacity: 0;
-    transform: translateY(20px) scale(0.6) rotate(-8deg);
-  }
-  20% {
     opacity: 1;
-    transform: translateY(-10px) scale(1.25) rotate(4deg);
+    transform: translateY(0) scale(0.8) rotate(-4deg);
   }
-  70% {
-    opacity: 1;
-    transform: translateY(-25px) scale(1.1) rotate(0deg);
+  50% {
+    transform: translateY(-25px) scale(1.25) rotate(4deg);
   }
   100% {
     opacity: 0;
-    transform: translateY(-60px) scale(0.8) rotate(-4deg);
+    transform: translateY(-50px) scale(1) rotate(-2deg);
   }
 }
 
 .score-burst-anim {
-  animation: score-burst-rise 1.1s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+  animation: score-burst-rise 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
-/* Comic Panel Stacking Depth */
-.panel-tilt-left {
-  transform: rotate(-1.2deg);
-}
-
-.panel-tilt-right {
-  transform: rotate(1.2deg);
-}
-
-.panel-tilt-steep {
-  transform: rotate(-2deg);
-}
-
-/* 2.5D Layered Comic Environment & Depth System */
-.perspective-scene {
-  perspective: 1200px;
-  perspective-origin: 50% 30%;
-  transform-style: preserve-3d;
-}
-
-.depth-shadow-comic {
-  box-shadow: 
-    0 4px 0 #1b1b20,
-    0 12px 28px -4px rgba(0, 0, 0, 0.65),
-    0 24px 48px -8px rgba(11, 14, 23, 0.7);
-}
-
-.depth-shadow-floating {
-  box-shadow: 
-    0 6px 0 #1b1b20,
-    0 16px 36px -4px rgba(220, 38, 38, 0.25),
-    0 30px 60px -12px rgba(0, 0, 0, 0.75);
-}
-
-/* Question Entrance from Physical Depth */
-@keyframes panel-enter-from-depth {
+/* Comic Page Peel Animation */
+@keyframes panel-slide-in {
   0% {
     opacity: 0;
-    transform: perspective(1000px) translateZ(-140px) scale(0.92) rotateX(6deg) translateY(15px);
-    filter: brightness(0.7) blur(1px);
-  }
-  65% {
-    opacity: 1;
-    transform: perspective(1000px) translateZ(18px) scale(1.015) rotateX(-1.5deg) translateY(-2px);
-    filter: brightness(1.05) blur(0px);
+    transform: translateY(18px) scale(0.98);
   }
   100% {
     opacity: 1;
-    transform: perspective(1000px) translateZ(0px) scale(1) rotateX(0deg) translateY(0px);
-    filter: brightness(1) blur(0px);
+    transform: translateY(0) scale(1);
   }
 }
 
 .animate-panel-enter {
-  animation: panel-enter-from-depth 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: panel-slide-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Answer Selected 3D States: Correct Forward vs Wrong Recoil */
-@keyframes answer-forward-slam {
-  0% {
-    transform: perspective(800px) translateZ(0px) scale(1);
-    box-shadow: 4px 4px 0px #1b1b20;
-  }
-  40% {
-    transform: perspective(800px) translateZ(35px) scale(1.06) rotate(-0.5deg);
-    box-shadow: 0 14px 28px rgba(34, 197, 94, 0.4), 6px 12px 0px #1b1b20;
-  }
-  100% {
-    transform: perspective(800px) translateZ(25px) scale(1.04);
-    box-shadow: 0 10px 22px rgba(34, 197, 94, 0.35), 5px 10px 0px #1b1b20;
-  }
+/* Answer Selected Feedback */
+@keyframes answer-push-forward {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.03) translate(-2px, -2px); }
+  100% { transform: scale(1); }
 }
 
 .animate-answer-forward {
-  animation: answer-forward-slam 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards;
-  z-index: 40 !important;
+  animation: answer-push-forward 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-@keyframes answer-recoil-depth {
-  0% {
-    transform: perspective(800px) translateZ(0px) scale(1) rotate(0deg);
-  }
-  25% {
-    transform: perspective(800px) translateZ(-35px) scale(0.95) rotate(-2deg);
-    filter: contrast(130%) brightness(0.85);
-  }
-  50% {
-    transform: perspective(800px) translateZ(-20px) scale(0.97) rotate(1.5deg);
-  }
-  75% {
-    transform: perspective(800px) translateZ(-10px) scale(0.985) rotate(-0.5deg);
-  }
-  100% {
-    transform: perspective(800px) translateZ(-5px) scale(0.99) rotate(0deg);
-  }
+@keyframes answer-push-recoil {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.97) translate(2px, 2px); }
+  100% { transform: scale(1); }
 }
 
 .animate-answer-recoil {
-  animation: answer-recoil-depth 0.45s ease-out forwards;
+  animation: answer-push-recoil 0.28s ease-out;
 }
 
-/* Cloud Drift in Layer 1 */
-@keyframes cloud-drift-slow {
-  0% { transform: translateX(-10%); }
-  50% { transform: translateX(5%); }
-  100% { transform: translateX(-10%); }
+/* 2.5D Atmospheric Environmental Animations */
+@keyframes cloud-drift-layer-1 {
+  0% { transform: translateX(-40px); }
+  50% { transform: translateX(40px); }
+  100% { transform: translateX(-40px); }
+}
+
+@keyframes cloud-drift-layer-2 {
+  0% { transform: translateX(60px); }
+  50% { transform: translateX(-60px); }
+  100% { transform: translateX(60px); }
 }
 
 .animate-cloud-drift-1 {
-  animation: cloud-drift-slow 60s ease-in-out infinite;
+  animation: cloud-drift-layer-1 28s ease-in-out infinite;
 }
 
 .animate-cloud-drift-2 {
-  animation: cloud-drift-slow 45s ease-in-out infinite reverse;
+  animation: cloud-drift-layer-2 36s ease-in-out infinite;
 }
 
-/* Distant Floating Embers & Dust Particles in Layer 1 */
-@keyframes particle-drift {
+@keyframes particle-drift-up {
   0% {
-    transform: translateY(0px) translateX(0px);
+    transform: translateY(0px) translateX(0px) rotate(0deg);
     opacity: 0;
   }
   20% {
     opacity: 0.6;
   }
   80% {
-    opacity: 0.4;
+    opacity: 0.6;
   }
   100% {
-    transform: translateY(-240px) translateX(30px);
+    transform: translateY(-240px) translateX(40px) rotate(180deg);
     opacity: 0;
   }
 }
 
 .animate-particle-drift-slow {
-  animation: particle-drift 12s linear infinite;
+  animation: particle-drift-up 12s linear infinite;
 }
 
 .animate-particle-drift-fast {
-  animation: particle-drift 8s linear infinite;
+  animation: particle-drift-up 7s linear infinite;
 }
 
-/* City Windows Subtle Animation in Layer 2 */
 @keyframes window-twinkle {
-  0%, 100% { opacity: 0.75; }
-  35% { opacity: 0.95; }
-  60% { opacity: 0.55; }
-  85% { opacity: 1; }
+  0%, 100% { opacity: 0.35; }
+  35% { opacity: 0.85; }
+  70% { opacity: 0.45; }
 }
 
 .animate-window-twinkle {
   animation: window-twinkle 4s ease-in-out infinite;
 }
 
-/* Foreground Spidey Character Parallax Breathing in Layer 4 */
-@keyframes spidey-hero-perch {
+@keyframes spidey-breathing-perch {
   0%, 100% {
     transform: translateY(0px) rotate(0deg);
   }
   50% {
-    transform: translateY(-6px) rotate(-0.5deg);
+    transform: translateY(-4px) rotate(0.5deg);
   }
 }
 
 .animate-spidey-perch {
-  animation: spidey-hero-perch 4s ease-in-out infinite;
+  animation: spidey-breathing-perch 3.5s ease-in-out infinite;
 }
 
-/* Web Canvas */
-#web-canvas {
-  pointer-events: none;
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 9999;
-}
-
-/* Comic Impact Burst Animation */
 @keyframes impact-pop {
   0% {
+    transform: scale(0.5) rotate(-15deg);
     opacity: 0;
-    transform: scale(0.3) rotate(-18deg);
   }
-  45% {
+  60% {
+    transform: scale(1.15) rotate(5deg);
     opacity: 1;
-    transform: scale(1.18) rotate(4deg);
-  }
-  70% {
-    transform: scale(0.96) rotate(-2deg);
   }
   100% {
     transform: scale(1) rotate(0deg);
+    opacity: 1;
   }
 }
 
 .animate-impact-pop {
-  animation: impact-pop 0.38s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  animation: impact-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-/* Question Speech Bubble Cinematic Expand */
-@keyframes bubble-expand {
+@keyframes comic-bubble-expand {
   0% {
+    transform: scale(0.85);
     opacity: 0;
-    transform: scale(0.88) translateY(10px);
-  }
-  70% {
-    opacity: 1;
-    transform: scale(1.02) translateY(-2px);
   }
   100% {
+    transform: scale(1);
     opacity: 1;
-    transform: scale(1) translateY(0px);
   }
 }
 
 .animate-bubble-expand {
-  animation: bubble-expand 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: comic-bubble-expand 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Web-Pulled Panel Snap */

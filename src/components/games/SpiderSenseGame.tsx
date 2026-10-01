@@ -1,7 +1,18 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { playSound } from '../../utils/audio';
 import { useSpiderAuth } from '../../context/AuthContext';
 import { LikeButton } from '../common/LikeButton';
+import {
+  SPIDER_SENSE_LEVELS,
+  SpiderSenseLevelConfig,
+  ArcadeDifficulty,
+  DIFFICULTY_MULTIPLIERS
+} from '../../data/arcadeLevelsData';
 import {
   Zap,
   Heart,
@@ -12,7 +23,16 @@ import {
   Sparkles,
   Trophy,
   Flame,
-  Award
+  Award,
+  Star,
+  Play,
+  Pause,
+  ArrowRight,
+  Lock,
+  CheckCircle2,
+  ShieldCheck,
+  Radio,
+  SlidersHorizontal
 } from 'lucide-react';
 
 interface SpiderSenseGameProps {
@@ -21,817 +41,983 @@ interface SpiderSenseGameProps {
 }
 
 type DangerAction = 'LEFT' | 'RIGHT' | 'JUMP' | 'DUCK' | 'WEB';
-type GameDifficultyMode = 'TRAINING' | 'ARCADE' | 'INSANE';
 
-interface DangerEvent {
+interface DangerInstance {
   id: number;
-  type: 'car' | 'debris' | 'projectile' | 'enemy' | 'electric' | 'web_trap';
+  type: 'car' | 'debris' | 'projectile' | 'enemy' | 'electric' | 'web_trap' | 'laser';
   name: string;
   icon: string;
   requiredAction: DangerAction;
   actionHint: string;
-  direction: 'left' | 'right' | 'top' | 'center';
+  direction: 'left' | 'right' | 'top' | 'center' | 'bottom';
   windowSeconds: number;
   spawnTime: number;
+  resolved: boolean;
+  success?: boolean;
 }
 
 export const SpiderSenseGame: React.FC<SpiderSenseGameProps> = ({
   onBackToArcade,
   onAddScore
 }) => {
-  const { userProfile, recordSession } = useSpiderAuth();
+  const { userProfile, recordSession, syncAnswerResult } = useSpiderAuth();
 
-  // Local storage stats
-  const [stats, setStats] = useState(() => {
+  // Local storage for Spider-Sense level progression
+  const [levelProgress, setLevelProgress] = useState<Record<number, { unlocked: boolean; stars: number; bestScore: number; fastestMs: number }>>(() => {
     try {
-      const saved = localStorage.getItem('spider_sense_reaction_stats');
+      const saved = localStorage.getItem('spider_sense_reaction_levels_v2');
       if (saved) return JSON.parse(saved);
     } catch {
       // ignore
     }
     return {
-      gamesPlayed: 0,
-      highestScore: 2450,
-      highestCombo: 7,
-      fastestReaction: 0.28,
-      averageReaction: 0.44
+      1: { unlocked: true, stars: 0, bestScore: 0, fastestMs: 0 },
+      2: { unlocked: false, stars: 0, bestScore: 0, fastestMs: 0 },
+      3: { unlocked: false, stars: 0, bestScore: 0, fastestMs: 0 },
+      4: { unlocked: false, stars: 0, bestScore: 0, fastestMs: 0 },
+      5: { unlocked: false, stars: 0, bestScore: 0, fastestMs: 0 },
+      6: { unlocked: false, stars: 0, bestScore: 0, fastestMs: 0 },
     };
   });
 
-  const [gameMode, setGameMode] = useState<GameDifficultyMode>('ARCADE');
+  // Selected Level & Difficulty
+  const [selectedLevelId, setSelectedLevelId] = useState<number>(1);
+  const [difficulty, setDifficulty] = useState<ArcadeDifficulty>('NORMAL');
+  const [inLevelSelect, setInLevelSelect] = useState<boolean>(true);
+
+  // Game UI Flow State
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [isPaused, setIsPaused] = useState<boolean>(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [levelVictory, setLevelVictory] = useState<boolean>(false);
   const [gameOver, setGameOver] = useState<boolean>(false);
+
+  // Gameplay Live Stats
   const [score, setScore] = useState<number>(0);
   const [lives, setLives] = useState<number>(3);
   const [combo, setCombo] = useState<number>(0);
   const [maxCombo, setMaxCombo] = useState<number>(0);
-  const [lastReactionTime, setLastReactionTime] = useState<number | null>(null);
-  const [reactionTimesList, setReactionTimesList] = useState<number[]>([]);
-  const [activeDanger, setActiveDanger] = useState<DangerEvent | null>(null);
+  const [threatsCleared, setThreatsCleared] = useState<number>(0);
+  const [perfectDodges, setPerfectDodges] = useState<number>(0);
+  const [fastestReactionSec, setFastestReactionSec] = useState<number | null>(null);
+  const [lastReactionSec, setLastReactionSec] = useState<number | null>(null);
+
+  // Active Threat & Spider-Sense Gauge
+  const [activeDanger, setActiveDanger] = useState<DangerInstance | null>(null);
+  const [spiderSenseEnergy, setSpiderSenseEnergy] = useState<number>(0); // 0 to 100
+  const [isSlowMoActive, setIsSlowMoActive] = useState<boolean>(false);
   const [feedbackText, setFeedbackText] = useState<{ text: string; color: string; sub?: string } | null>(null);
-  const [spiderSenseAura, setSpiderSenseAura] = useState<boolean>(false);
   const [spideyPose, setSpideyPose] = useState<'READY' | 'JUMP' | 'DUCK' | 'DODGE_L' | 'DODGE_R' | 'WEB' | 'HIT'>('READY');
   const [screenShake, setScreenShake] = useState<boolean>(false);
-  const [isNewHighScore, setIsNewHighScore] = useState<boolean>(false);
+  const [levelStarsWon, setLevelStarsWon] = useState<number>(0);
 
-  const dangerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const nextSpawnTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const activeDangerRef = useRef<DangerEvent | null>(null);
+  const dangerTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const nextSpawnTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const activeDangerRef = useRef<DangerInstance | null>(null);
+  const slowMoTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Sync ref with state
+  const currentLevelConfig = SPIDER_SENSE_LEVELS.find((l) => l.id === selectedLevelId) || SPIDER_SENSE_LEVELS[0];
+
+  // Sync ref
   useEffect(() => {
     activeDangerRef.current = activeDanger;
   }, [activeDanger]);
 
-  // Awaken title based on combo
-  const getSenseTitle = (c: number) => {
-    if (c >= 20) return '🕷️ SPIDER-SENSE MASTER';
-    if (c >= 10) return 'SPIDER-SENSE x3';
-    if (c >= 5) return 'SPIDER-SENSE x2';
-    if (c >= 3) return 'SPIDER-SENSE AWAKENED';
-    return null;
+  // Save Progress
+  const saveProgress = (levelId: number, stars: number, finalScore: number, reactionMs: number) => {
+    setLevelProgress((prev) => {
+      const current = prev[levelId] || { unlocked: true, stars: 0, bestScore: 0, fastestMs: 0 };
+      const updatedStars = Math.max(current.stars, stars);
+      const updatedScore = Math.max(current.bestScore, finalScore);
+      const updatedFastest = current.fastestMs === 0 ? reactionMs : Math.min(current.fastestMs, reactionMs || 9999);
+
+      const nextLevelId = levelId + 1;
+      const nextLevelState = prev[nextLevelId] || { unlocked: false, stars: 0, bestScore: 0, fastestMs: 0 };
+
+      const updated = {
+        ...prev,
+        [levelId]: {
+          unlocked: true,
+          stars: updatedStars,
+          bestScore: updatedScore,
+          fastestMs: updatedFastest,
+        },
+        ...(stars > 0 && nextLevelId <= SPIDER_SENSE_LEVELS.length
+          ? { [nextLevelId]: { ...nextLevelState, unlocked: true } }
+          : {}),
+      };
+
+      try {
+        localStorage.setItem('spider_sense_reaction_levels_v2', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
   };
 
-  // Danger Definitions Pool
-  const dangerPool: Omit<DangerEvent, 'id' | 'spawnTime' | 'windowSeconds'>[] = [
-    {
-      type: 'car',
+  // Threat Definitions Master Pool
+  const DANGER_TEMPLATES: Record<string, { name: string; icon: string; requiredAction: DangerAction; actionHint: string; direction: 'left' | 'right' | 'top' | 'bottom' | 'center' }> = {
+    car: {
       name: 'CHARGING SPEEDER CAB',
       icon: '🚗',
       requiredAction: 'JUMP',
-      actionHint: 'JUMP OVER IT! [↑ JUMP]',
-      direction: 'left'
+      actionHint: 'JUMP OVER IT! [↑ JUMP / W]',
+      direction: 'left',
     },
-    {
-      type: 'debris',
+    debris: {
       name: 'FALLING MASONRY BRICKS',
       icon: '🧱',
       requiredAction: 'LEFT',
-      actionHint: 'VAULT ASIDE! [← LEFT]',
-      direction: 'top'
+      actionHint: 'VAULT ASIDE! [← LEFT / A]',
+      direction: 'top',
     },
-    {
-      type: 'projectile',
-      name: 'PUMPKIN BOMB GLIDER MISSILE',
+    projectile: {
+      name: 'PUMPKIN BOMB MISSILE',
       icon: '💥',
       requiredAction: 'WEB',
       actionHint: 'WEB TRAP IN MID-AIR! [SPACE / WEB]',
-      direction: 'right'
+      direction: 'right',
     },
-    {
-      type: 'enemy',
+    enemy: {
       name: 'RHINO CRUSHING CHARGE',
-      icon: '👊',
+      icon: '🦏',
       requiredAction: 'DUCK',
-      actionHint: 'DUCK UNDER THE SWING! [↓ DUCK]',
-      direction: 'center'
+      actionHint: 'DUCK UNDER THE CRUSH! [↓ DUCK / S]',
+      direction: 'center',
     },
-    {
-      type: 'electric',
+    electric: {
       name: 'ELECTRO VOLTAGE SHOCK',
       icon: '⚡',
       requiredAction: 'RIGHT',
-      actionHint: 'EVADE RIGHT! [→ RIGHT]',
-      direction: 'left'
+      actionHint: 'EVADE RIGHT! [→ RIGHT / D]',
+      direction: 'left',
     },
-    {
-      type: 'web_trap',
+    web_trap: {
       name: 'SYMBIOTE TENDRIL NET',
       icon: '🕸️',
       requiredAction: 'WEB',
-      actionHint: 'FIRE COUNTER WEB! [SPACE / WEB]',
-      direction: 'center'
-    }
-  ];
+      actionHint: 'FIRE COUNTER-WEB SHIELD! [SPACE / WEB]',
+      direction: 'center',
+    },
+    laser: {
+      name: 'OSCORP DRONE LASER SWEEP',
+      icon: '🎯',
+      requiredAction: 'DUCK',
+      actionHint: 'DUCK UNDER THE LASER! [↓ DUCK / S]',
+      direction: 'top',
+    },
+  };
 
-  // Spawn Next Danger Routine
-  const spawnDanger = useCallback(() => {
-    if (!isPlaying || gameOver) return;
+  // Spawn Next Threat
+  const spawnThreat = useCallback(() => {
+    if (!isPlaying || isPaused || gameOver || levelVictory) return;
 
-    // Clear previous danger timeout
-    if (dangerTimeoutRef.current) {
-      clearTimeout(dangerTimeoutRef.current);
-    }
+    const level = currentLevelConfig;
+    const diffMult = DIFFICULTY_MULTIPLIERS[difficulty];
 
-    const template = dangerPool[Math.floor(Math.random() * dangerPool.length)];
+    const allowedTypes = level.allowedThreatTypes;
+    const randomType = allowedTypes[Math.floor(Math.random() * allowedTypes.length)];
+    const template = DANGER_TEMPLATES[randomType] || DANGER_TEMPLATES.car;
 
-    // Calculate dynamic reaction window based on score & mode
-    let baseWindow = 0.95;
-    if (gameMode === 'TRAINING') baseWindow = 1.35;
-    else if (gameMode === 'INSANE') baseWindow = 0.55;
+    const windowSec = level.baseReactionWindow * diffMult.windowScale * (isSlowMoActive ? 2.0 : 1.0);
 
-    // Gradually compress window with score (down to 0.40s in Arcade)
-    const compression = Math.min(0.35, Math.floor(score / 500) * 0.04);
-    const windowSeconds = Math.max(0.38, baseWindow - compression);
-
-    const newDanger: DangerEvent = {
-      ...template,
-      id: Date.now(),
-      windowSeconds,
-      spawnTime: performance.now()
+    const newDanger: DangerInstance = {
+      id: Date.now() + Math.random(),
+      type: randomType,
+      name: template.name,
+      icon: template.icon,
+      requiredAction: template.requiredAction,
+      actionHint: template.actionHint,
+      direction: template.direction,
+      windowSeconds: windowSec,
+      spawnTime: performance.now(),
+      resolved: false,
     };
 
     setActiveDanger(newDanger);
-    setSpiderSenseAura(true);
     setSpideyPose('READY');
     playSound('spider-sense');
 
-    // Danger expiration timer (player did not react in time)
-    dangerTimeoutRef.current = setTimeout(() => {
-      handleDangerMiss();
-    }, windowSeconds * 1000);
-  }, [isPlaying, gameOver, gameMode, score]);
+    // Timeout if player fails to react in time
+    if (dangerTimerRef.current) clearTimeout(dangerTimerRef.current);
+    dangerTimerRef.current = setTimeout(() => {
+      handleThreatTimeout();
+    }, windowSec * 1000);
+  }, [isPlaying, isPaused, gameOver, levelVictory, currentLevelConfig, difficulty, isSlowMoActive]);
 
-  // Handle Miss / Expired Reaction
-  const handleDangerMiss = useCallback(() => {
-    if (!activeDangerRef.current) return;
+  // Handle Threat Timeout (Player failed to react)
+  const handleThreatTimeout = () => {
+    const danger = activeDangerRef.current;
+    if (!danger || danger.resolved) return;
 
-    playSound('bam');
-    setScreenShake(true);
-    setTimeout(() => setScreenShake(false), 350);
-
-    setSpideyPose('HIT');
-    setSpiderSenseAura(false);
+    danger.resolved = true;
+    danger.success = false;
     setActiveDanger(null);
-    setFeedbackText({
-      text: '💥 HIT! TOO SLOW!',
-      color: '#ef4444',
-      sub: 'LIVES -1 • COMBO RESET'
-    });
+
+    playSound('hit');
+    setScreenShake(true);
+    setTimeout(() => setScreenShake(false), 400);
 
     setCombo(0);
+    setSpideyPose('HIT');
+    setFeedbackText({
+      text: '💥 HIT! TOO SLOW!',
+      color: '#dc2626',
+      sub: 'Spider-Sense reaction window missed!',
+    });
 
-    // If Arcade or Insane, deduct life
-    if (gameMode !== 'TRAINING') {
-      setLives((prevLives) => {
-        const next = prevLives - 1;
-        if (next <= 0) {
-          triggerGameOver();
-          return 0;
-        }
-        return next;
-      });
-    }
+    setLives((prev) => {
+      const next = prev - 1;
+      if (next <= 0) {
+        setGameOver(true);
+        playSound('game_over');
+        saveProgress(selectedLevelId, 0, score, 0);
+        if (onAddScore) onAddScore(score);
+      } else {
+        // Schedule next threat
+        scheduleNextSpawn();
+      }
+      return next;
+    });
+  };
 
-    // Schedule next attack if still alive
-    nextSpawnTimeoutRef.current = setTimeout(() => {
-      setFeedbackText(null);
-      setSpideyPose('READY');
-      spawnDanger();
-    }, 1100);
-  }, [gameMode, spawnDanger]);
+  // Schedule Next Threat Spawn
+  const scheduleNextSpawn = useCallback(() => {
+    if (nextSpawnTimerRef.current) clearTimeout(nextSpawnTimerRef.current);
+    const delay = Math.floor(Math.random() * (currentLevelConfig.spawnIntervalMax - currentLevelConfig.spawnIntervalMin + 1)) + currentLevelConfig.spawnIntervalMin;
+    nextSpawnTimerRef.current = setTimeout(() => {
+      spawnThreat();
+    }, isSlowMoActive ? delay * 1.5 : delay);
+  }, [currentLevelConfig, isSlowMoActive, spawnThreat]);
 
-  // Handle Player Action Input
+  // Handle User Reaction Action
   const handleAction = useCallback((action: DangerAction) => {
-    if (!isPlaying || gameOver || !activeDangerRef.current) return;
+    if (!isPlaying || isPaused || gameOver || levelVictory) return;
 
     const danger = activeDangerRef.current;
-    const now = performance.now();
-    const deltaSeconds = (now - danger.spawnTime) / 1000;
-
-    // Clear danger expiration timer
-    if (dangerTimeoutRef.current) {
-      clearTimeout(dangerTimeoutRef.current);
-      dangerTimeoutRef.current = null;
+    if (!danger || danger.resolved) {
+      // False alarm penalty (acting when no danger)
+      playSound('wrong');
+      setCombo(0);
+      setFeedbackText({ text: 'FALSE ALARM!', color: '#991b1b', sub: 'No incoming threat!' });
+      return;
     }
 
-    setActiveDanger(null);
-    setSpiderSenseAura(false);
+    danger.resolved = true;
+    if (dangerTimerRef.current) clearTimeout(dangerTimerRef.current);
 
-    // Update Pose based on action
-    if (action === 'JUMP') setSpideyPose('JUMP');
-    else if (action === 'DUCK') setSpideyPose('DUCK');
-    else if (action === 'LEFT') setSpideyPose('DODGE_L');
-    else if (action === 'RIGHT') setSpideyPose('DODGE_R');
-    else if (action === 'WEB') setSpideyPose('WEB');
+    const reactionSec = (performance.now() - danger.spawnTime) / 1000;
+    setLastReactionSec(parseFloat(reactionSec.toFixed(3)));
+    setFastestReactionSec((prev) => (prev === null ? reactionSec : Math.min(prev, reactionSec)));
 
-    // Check if player executed CORRECT action
     const isCorrect = action === danger.requiredAction;
 
     if (isCorrect) {
-      playSound('correct');
-
-      // Record reaction time
-      setLastReactionTime(parseFloat(deltaSeconds.toFixed(3)));
-      setReactionTimesList((prev) => [...prev, deltaSeconds]);
-
-      // Calculate rating & XP
-      let ratingText = 'GOOD';
-      let ratingColor = '#22c55e';
-      let earnedXP = 75;
-
-      if (deltaSeconds < 0.30) {
-        ratingText = '⚡ PERFECT!';
-        ratingColor = '#facc15';
-        earnedXP = 250;
-      } else if (deltaSeconds <= 0.60) {
-        ratingText = '✓ GREAT!';
-        ratingColor = '#38bdf8';
-        earnedXP = 150;
-      }
+      danger.success = true;
+      const diffMult = DIFFICULTY_MULTIPLIERS[difficulty];
+      const isPerfect = reactionSec <= danger.windowSeconds * 0.45;
 
       const newCombo = combo + 1;
       setCombo(newCombo);
       setMaxCombo((prev) => Math.max(prev, newCombo));
 
-      const comboMultiplier = Math.min(5, Math.floor(newCombo / 3) + 1);
-      const points = earnedXP * comboMultiplier;
-
-      setScore((s) => s + points);
-      if (onAddScore) {
-        onAddScore(points);
+      if (isPerfect) {
+        setPerfectDodges((prev) => prev + 1);
+        playSound('perfect');
+      } else {
+        playSound('correct');
       }
 
-      setFeedbackText({
-        text: ratingText,
-        color: ratingColor,
-        sub: `${deltaSeconds.toFixed(2)}s • +${points} PTS`
-      });
+      // Points calculation
+      const basePts = isPerfect ? 500 : 250;
+      const timeBonus = Math.max(0, Math.round((danger.windowSeconds - reactionSec) * 200));
+      const comboMult = Math.min(5, 1 + Math.floor(newCombo / 3));
+      const slowMoBonus = isSlowMoActive ? 2 : 1;
+      const totalPts = Math.round((basePts + timeBonus) * diffMult.scoreMult * comboMult * slowMoBonus);
 
-      // Schedule next attack
-      const nextDelay = gameMode === 'INSANE' ? 600 : gameMode === 'TRAINING' ? 1400 : 900;
-      nextSpawnTimeoutRef.current = setTimeout(() => {
-        setFeedbackText(null);
-        setSpideyPose('READY');
-        spawnDanger();
-      }, nextDelay);
-    } else {
-      // Wrong Action Input
-      playSound('wrong');
-      setScreenShake(true);
-      setTimeout(() => setScreenShake(false), 300);
+      setScore((prev) => prev + totalPts);
 
-      setSpideyPose('HIT');
-      setCombo(0);
+      // Spider-Sense energy refill
+      setSpiderSenseEnergy((prev) => Math.min(100, prev + (isPerfect ? 18 : 10)));
+
+      // Set pose based on action
+      if (action === 'JUMP') setSpideyPose('JUMP');
+      else if (action === 'DUCK') setSpideyPose('DUCK');
+      else if (action === 'LEFT') setSpideyPose('DODGE_L');
+      else if (action === 'RIGHT') setSpideyPose('DODGE_R');
+      else if (action === 'WEB') setSpideyPose('WEB');
 
       setFeedbackText({
-        text: '❌ WRONG REACTION!',
-        color: '#ef4444',
-        sub: `Needed ${danger.requiredAction}!`
+        text: isPerfect ? `⚡ PERFECT REFLEX! +${totalPts}` : `✓ DODGED! +${totalPts}`,
+        color: isPerfect ? '#facc15' : '#22c55e',
+        sub: `${reactionSec.toFixed(3)}s reaction • ${comboMult}x combo multiplier`,
       });
 
-      if (gameMode !== 'TRAINING') {
-        setLives((prevLives) => {
-          const next = prevLives - 1;
-          if (next <= 0) {
-            triggerGameOver();
-            return 0;
-          }
-          return next;
+      // Advance threats cleared
+      const nextCleared = threatsCleared + 1;
+      setThreatsCleared(nextCleared);
+
+      // Check Level Victory
+      if (nextCleared >= currentLevelConfig.threatCount) {
+        setLevelVictory(true);
+        playSound('level_complete');
+
+        let stars = 1;
+        if (score + totalPts >= currentLevelConfig.targetScore) stars++;
+        if (perfectDodges + (isPerfect ? 1 : 0) >= currentLevelConfig.perfectDodgeTarget) stars++;
+        setLevelStarsWon(stars);
+
+        saveProgress(selectedLevelId, stars, score + totalPts, Math.round(reactionSec * 1000));
+        if (onAddScore) onAddScore(score + totalPts);
+        syncAnswerResult(true, currentLevelConfig.xpReward, newCombo);
+        recordSession({
+          gameMode: `spider_sense_lvl_${currentLevelConfig.id}`,
+          score: score + totalPts,
+          questionsAnswered: currentLevelConfig.threatCount,
+          correctAnswers: nextCleared,
+          accuracy: Math.round((nextCleared / currentLevelConfig.threatCount) * 100),
+          bestStreak: Math.max(maxCombo, newCombo),
+          xpEarned: currentLevelConfig.xpReward,
+          completedAt: new Date().toISOString(),
+          factsDiscovered: 1,
         });
-      }
-
-      nextSpawnTimeoutRef.current = setTimeout(() => {
-        setFeedbackText(null);
-        setSpideyPose('READY');
-        spawnDanger();
-      }, 1200);
-    }
-  }, [isPlaying, gameOver, combo, gameMode, onAddScore, spawnDanger]);
-
-  // Game Over trigger
-  const triggerGameOver = useCallback(() => {
-    playSound('bam');
-    setGameOver(true);
-    setIsPlaying(false);
-
-    const finalScore = score;
-    const finalMaxCombo = maxCombo;
-    const fastest = reactionTimesList.length > 0 ? Math.min(...reactionTimesList) : stats.fastestReaction;
-    const average =
-      reactionTimesList.length > 0
-        ? reactionTimesList.reduce((a, b) => a + b, 0) / reactionTimesList.length
-        : stats.averageReaction;
-
-    const isBest = finalScore > stats.highestScore || fastest < stats.fastestReaction;
-    if (isBest) {
-      setIsNewHighScore(true);
-      playSound('unlock');
-    }
-
-    // Update Stats
-    const updatedStats = {
-      gamesPlayed: stats.gamesPlayed + 1,
-      highestScore: Math.max(stats.highestScore, finalScore),
-      highestCombo: Math.max(stats.highestCombo, finalMaxCombo),
-      fastestReaction: parseFloat(fastest.toFixed(3)),
-      averageReaction: parseFloat(average.toFixed(3))
-    };
-    setStats(updatedStats);
-    try {
-      localStorage.setItem('spider_sense_reaction_stats', JSON.stringify(updatedStats));
-    } catch {
-      // ignore
-    }
-
-    // Record session to Firestore
-    if (recordSession) {
-      recordSession({
-        gameMode: 'spider_sense_reaction',
-        score: finalScore,
-        questionsAnswered: reactionTimesList.length,
-        correctAnswers: reactionTimesList.length,
-        accuracy: 100,
-        bestStreak: finalMaxCombo,
-        xpEarned: Math.floor(finalScore / 5),
-        completedAt: new Date().toISOString(),
-        factsDiscovered: 0
-      }).catch(() => {
-        // network safe
-      });
-    }
-  }, [score, maxCombo, reactionTimesList, stats, recordSession]);
-
-  // Start / Restart Game
-  const startGame = (mode: GameDifficultyMode = gameMode) => {
-    // Clear any pending timeouts
-    if (dangerTimeoutRef.current) clearTimeout(dangerTimeoutRef.current);
-    if (nextSpawnTimeoutRef.current) clearTimeout(nextSpawnTimeoutRef.current);
-
-    setGameMode(mode);
-    setScore(0);
-    setLives(mode === 'TRAINING' ? 99 : 3);
-    setCombo(0);
-    setMaxCombo(0);
-    setLastReactionTime(null);
-    setReactionTimesList([]);
-    setFeedbackText(null);
-    setSpideyPose('READY');
-    setSpiderSenseAura(false);
-    setIsNewHighScore(false);
-    setGameOver(false);
-    setIsPlaying(true);
-
-    playSound('thwip');
-
-    // Spawn first danger after brief countdown
-    nextSpawnTimeoutRef.current = setTimeout(() => {
-      spawnDanger();
-    }, 800);
-  };
-
-  // Keyboard Event Listeners
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isPlaying || gameOver) {
-        if (e.code === 'Space' && !isPlaying) {
-          e.preventDefault();
-          startGame(gameMode);
-        }
         return;
       }
 
-      if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
-        e.preventDefault();
-        handleAction('LEFT');
-      } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {
-        e.preventDefault();
-        handleAction('RIGHT');
-      } else if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+      scheduleNextSpawn();
+    } else {
+      // Wrong Action
+      danger.success = false;
+      playSound('wrong');
+      setCombo(0);
+      setSpideyPose('HIT');
+      setScreenShake(true);
+      setTimeout(() => setScreenShake(false), 400);
+
+      setFeedbackText({
+        text: `WRONG MOVE! Needed [${danger.requiredAction}]`,
+        color: '#dc2626',
+        sub: `Tried ${action} instead!`,
+      });
+
+      setLives((prev) => {
+        const next = prev - 1;
+        if (next <= 0) {
+          setGameOver(true);
+          playSound('game_over');
+          saveProgress(selectedLevelId, 0, score, 0);
+          if (onAddScore) onAddScore(score);
+        } else {
+          scheduleNextSpawn();
+        }
+        return next;
+      });
+    }
+
+    setActiveDanger(null);
+  }, [isPlaying, isPaused, gameOver, levelVictory, difficulty, combo, isSlowMoActive, threatsCleared, currentLevelConfig, selectedLevelId, score, perfectDodges, maxCombo, onAddScore, syncAnswerResult, recordSession, scheduleNextSpawn]);
+
+  // Activate Spider-Sense Slow-Mo Mode
+  const triggerSpiderSenseSlowMo = useCallback(() => {
+    if (spiderSenseEnergy >= 40 && !isSlowMoActive) {
+      setIsSlowMoActive(true);
+      setSpiderSenseEnergy((prev) => Math.max(0, prev - 40));
+      playSound('slowmo');
+
+      setFeedbackText({
+        text: '⚡ SPIDER-SENSE TIME WARP ACTIVATED!',
+        color: '#facc15',
+        sub: 'Reaction window expanded • 2x Score Multiplier Active!',
+      });
+
+      if (slowMoTimeoutRef.current) clearTimeout(slowMoTimeoutRef.current);
+      slowMoTimeoutRef.current = setTimeout(() => {
+        setIsSlowMoActive(false);
+      }, 5000);
+    }
+  }, [spiderSenseEnergy, isSlowMoActive]);
+
+  // Keyboard Controller
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'ArrowUp' || e.code === 'KeyW') {
         e.preventDefault();
         handleAction('JUMP');
       } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
         e.preventDefault();
         handleAction('DUCK');
+      } else if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+        e.preventDefault();
+        handleAction('LEFT');
+      } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+        e.preventDefault();
+        handleAction('RIGHT');
       } else if (e.code === 'Space') {
         e.preventDefault();
         handleAction('WEB');
+      } else if (e.code === 'KeyE') {
+        triggerSpiderSenseSlowMo();
+      } else if (e.code === 'Escape' || e.code === 'KeyP') {
+        if (isPlaying && !gameOver && !levelVictory) {
+          setIsPaused((prev) => !prev);
+          playSound('click');
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPlaying, gameOver, gameMode, handleAction]);
+  }, [isPlaying, isPaused, gameOver, levelVictory, handleAction, triggerSpiderSenseSlowMo]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (dangerTimeoutRef.current) clearTimeout(dangerTimeoutRef.current);
-      if (nextSpawnTimeoutRef.current) clearTimeout(nextSpawnTimeoutRef.current);
-    };
-  }, []);
+  // Start Level with countdown sequence
+  const startLevel = (levelId: number) => {
+    setSelectedLevelId(levelId);
+    setInLevelSelect(false);
+    setIsPlaying(false);
+    setIsPaused(false);
+    setLevelVictory(false);
+    setGameOver(false);
+    setScore(0);
+    setLives(3);
+    setCombo(0);
+    setMaxCombo(0);
+    setThreatsCleared(0);
+    setPerfectDodges(0);
+    setSpiderSenseEnergy(0);
+    setIsSlowMoActive(false);
+    setFeedbackText(null);
+    setSpideyPose('READY');
+    setCountdown(3);
+
+    playSound('click');
+
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev === null) return null;
+        if (prev > 1) {
+          playSound('tick');
+          return prev - 1;
+        }
+        clearInterval(timer);
+        playSound('spider-sense');
+        setIsPlaying(true);
+        setTimeout(() => {
+          spawnThreat();
+        }, 500);
+        return null;
+      });
+    }, 700);
+  };
 
   return (
-    <section
-      className={`space-y-4 max-w-5xl mx-auto select-none ${screenShake ? 'shake-comic' : ''}`}
-      id="spider-sense-cabinet"
-    >
-      {/* Header Banner */}
+    <section className="space-y-6" id="spider-sense-danger-game">
+      {/* Red Comic Hero Banner */}
       <div className="border-4 sm:border-6 border-[#1b1b20] bg-gradient-to-r from-[#180b2a] via-[#4338ca] to-[#dc2626] text-white p-4 sm:p-6 ink-shadow-red-multi relative overflow-hidden">
-        <div className="comic-dots-yellow absolute inset-0 opacity-20 pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="comic-dots-red absolute inset-0 opacity-25 pointer-events-none" />
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="bg-[#1b1b20] text-[#facc15] font-comic text-xs font-black px-2.5 py-0.5 border border-white/40 uppercase">
-                ARCADE GAME #08 • SPIDER-SENSE
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="bg-[#facc15] text-[#1b1b20] font-comic text-xs font-black px-2.5 py-0.5 uppercase border border-white">
+                ARCADE ENGINE #08
               </span>
-              <span className="bg-[#dc2626] text-white font-comic text-[10px] font-black px-2 py-0.5 border border-white/40 uppercase">
-                {gameMode} MODE
+              <span className="bg-[#dc2626] text-white font-comic text-xs font-black px-2 py-0.5 uppercase">
+                REFLEX RADAR TEST
               </span>
             </div>
-            <h2 className="font-comic text-2xl sm:text-4xl font-black uppercase text-white tracking-tight">
-              ⚡ SPIDER-SENSE: REAL-TIME REFLEX DUEL
-            </h2>
-            <p className="font-comic text-xs sm:text-sm text-white/90 font-semibold mt-0.5">
-              “YOUR REFLEXES VS THE MULTIVERSE.” React before the danger strikes! Jump, duck, dodge, or web!
+            <h1 className="font-comic text-2xl sm:text-4xl font-black uppercase tracking-tight text-white">
+              SPIDER-SENSE: DANGER DETECTOR
+            </h1>
+            <p className="font-comic text-xs sm:text-sm font-semibold text-white/90 mt-1 max-w-xl">
+              Precognitive reflex defense against gliders, charging speeders, lightning strikes, and multi-hazard volleys!
             </p>
           </div>
 
-          <button
-            onClick={onBackToArcade}
-            className="self-start sm:self-center bg-white hover:bg-[#ffdf9f] text-[#1b1b20] border-3 border-[#1b1b20] px-4 py-2 font-comic text-xs sm:text-sm font-black uppercase ink-btn ink-shadow-sm flex items-center gap-1.5 cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>BACK TO ARCADE</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Comic In-Game Live HUD */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 border-4 border-[#1b1b20] bg-white p-3 sm:p-4 depth-shadow-comic font-comic">
-        <div className="border-2 border-[#1b1b20] bg-[#fff0f0] p-2 text-center">
-          <span className="text-[10px] font-black uppercase text-[#dc2626] block">LIVES REMAINING</span>
-          <span className="text-xl sm:text-2xl font-black text-[#dc2626]">
-            {gameMode === 'TRAINING' ? '❤️ ∞' : '❤️'.repeat(Math.max(0, lives)) || '💀'}
-          </span>
-        </div>
-
-        <div className="border-2 border-[#1b1b20] bg-[#f0ecf4] p-2 text-center">
-          <span className="text-[10px] font-black uppercase text-[#1b1b20] block">SCORE</span>
-          <span className="text-xl sm:text-2xl font-black text-[#1b1b20]">{score.toLocaleString()}</span>
-        </div>
-
-        <div className="border-2 border-[#1b1b20] bg-[#fefce8] p-2 text-center">
-          <span className="text-[10px] font-black uppercase text-[#854d0e] block">
-            {getSenseTitle(combo) || 'COMBO STREAK'}
-          </span>
-          <span className="text-xl sm:text-2xl font-black text-[#b45309] flex items-center justify-center gap-1">
-            <Zap className="w-4 h-4" /> x{combo}
-          </span>
-        </div>
-
-        <div className="border-2 border-[#1b1b20] bg-[#1b1b20] text-white p-2 text-center">
-          <span className="text-[10px] font-black uppercase text-[#facc15] block">LAST REACTION</span>
-          <span className="text-xl sm:text-2xl font-black text-white">
-            {lastReactionTime !== null ? `${lastReactionTime}s` : '---'}
-          </span>
-        </div>
-      </div>
-
-      {/* Main Game Stage Scene */}
-      <div
-        className={`relative border-4 sm:border-6 border-[#1b1b20] bg-gradient-to-b from-[#0f0919] via-[#24113a] to-[#1e1b4b] h-[360px] sm:h-[440px] overflow-hidden depth-shadow-comic flex flex-col justify-between p-4 ${
-          spiderSenseAura ? 'ring-4 ring-[#facc15]' : ''
-        }`}
-      >
-        {/* City Skyline Background Silhouettes */}
-        <div className="absolute inset-0 pointer-events-none opacity-40">
-          <svg viewBox="0 0 800 440" className="w-full h-full" preserveAspectRatio="none">
-            <path d="M0 440 L0 260 L60 260 L60 210 L120 210 L120 280 L180 280 L180 180 L230 180 L230 140 L240 140 L240 280 L310 280 L310 200 L370 200 L370 120 L420 120 L420 300 L500 300 L500 170 L560 170 L560 260 L640 260 L640 160 L700 160 L700 440 Z" fill="#090514"/>
-          </svg>
-        </div>
-
-        {/* Top Danger Announcement Banner */}
-        <div className="relative z-10 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="bg-[#1b1b20] text-white font-comic text-xs font-black px-2.5 py-1 border border-white/30 uppercase">
-              MODE: {gameMode}
-            </span>
-          </div>
-
-          {activeDanger && (
-            <div className="bg-[#dc2626] text-white font-comic font-black text-sm sm:text-base px-4 py-1 border-3 border-[#1b1b20] shadow-[3px_3px_0px_0px_#1b1b20] animate-bounce flex items-center gap-2">
-              <span className="text-xl">⚠️</span>
-              <span>DANGER: {activeDanger.name}!</span>
-            </div>
-          )}
-        </div>
-
-        {/* Center Stage: Spider-Man and Incoming Hazard */}
-        <div className="relative z-10 flex-1 flex items-center justify-center">
-          {/* Active Hazard Flying In */}
-          {activeDanger && (
-            <div
-              className={`absolute transition-all duration-200 z-20 flex flex-col items-center ${
-                activeDanger.direction === 'left'
-                  ? 'left-6 sm:left-14 bottom-16'
-                  : activeDanger.direction === 'right'
-                  ? 'right-6 sm:right-14 bottom-16'
-                  : activeDanger.direction === 'top'
-                  ? 'top-8'
-                  : 'right-1/4 top-16'
-              }`}
+            <button
+              type="button"
+              onClick={onBackToArcade}
+              className="bg-white hover:bg-[#ffdf9f] text-[#1b1b20] border-2 border-[#1b1b20] px-3.5 py-2 font-comic text-xs font-black uppercase flex items-center gap-1.5 ink-btn ink-shadow-sm cursor-pointer"
             >
-              <div className="text-5xl sm:text-6xl filter drop-shadow-[0_0_12px_rgba(239,68,68,0.8)] animate-pulse">
-                {activeDanger.icon}
-              </div>
-              <span className="bg-[#1b1b20] text-[#facc15] font-comic text-[11px] font-black px-2 py-0.5 border border-white mt-1 uppercase shadow-md">
-                {activeDanger.actionHint}
-              </span>
-            </div>
-          )}
-
-          {/* Central Spider-Man Character Illustration */}
-          <div className="relative flex flex-col items-center">
-            {/* Spider-Sense Radiating Waves on Head */}
-            {spiderSenseAura && (
-              <div className="absolute -top-14 flex items-center justify-center animate-ping">
-                <span className="font-comic font-black text-3xl sm:text-4xl text-[#facc15] drop-shadow-[0_0_8px_#facc15]">
-                  ⚡ ⚡ ⚡
-                </span>
-              </div>
-            )}
-
-            {/* Pose-dependent SVG character */}
-            <div
-              className={`w-36 h-36 sm:w-44 sm:h-44 transition-transform duration-150 ${
-                spideyPose === 'JUMP'
-                  ? '-translate-y-16 scale-105'
-                  : spideyPose === 'DUCK'
-                  ? 'translate-y-8 scale-90'
-                  : spideyPose === 'DODGE_L'
-                  ? '-translate-x-14 rotate-[-12deg]'
-                  : spideyPose === 'DODGE_R'
-                  ? 'translate-x-14 rotate-[12deg]'
-                  : spideyPose === 'WEB'
-                  ? 'scale-110'
-                  : spideyPose === 'HIT'
-                  ? 'rotate-[-25deg] scale-95 opacity-80'
-                  : 'scale-100'
-              }`}
-            >
-              <svg viewBox="0 0 200 200" className="w-full h-full filter drop-shadow-[4px_4px_0_#1b1b20]">
-                {/* Spidey Torso in Combat Ready Stance */}
-                <ellipse cx="100" cy="120" rx="30" ry="38" fill="#dc2626" stroke="#1b1b20" strokeWidth="5"/>
-                <path d="M78 110 Q100 95 122 110 L118 145 Q100 155 82 145 Z" fill="#1d4ed8" stroke="#1b1b20" strokeWidth="3"/>
-                <circle cx="100" cy="122" r="6" fill="#1b1b20"/>
-
-                {/* Mask / Head */}
-                <ellipse cx="100" cy="70" rx="26" ry="32" fill="#dc2626" stroke="#1b1b20" strokeWidth="5"/>
-                <g stroke="#1b1b20" strokeWidth="2.5" fill="none">
-                  <line x1="100" y1="38" x2="100" y2="102"/>
-                  <path d="M78 60 Q100 70 122 60"/>
-                  <path d="M76 80 Q100 90 124 80"/>
-                </g>
-                {/* White Eyes */}
-                <path d="M82 65 Q94 58 97 70 Q92 78 80 73 Z" fill="#ffffff" stroke="#1b1b20" strokeWidth="3.5"/>
-                <path d="M118 65 Q106 58 103 70 Q108 78 120 73 Z" fill="#ffffff" stroke="#1b1b20" strokeWidth="3.5"/>
-
-                {/* Web stream if pose is WEB */}
-                {spideyPose === 'WEB' && (
-                  <path d="M115 110 L180 80 L195 75" stroke="#ffffff" strokeWidth="6" strokeLinecap="round"/>
-                )}
-              </svg>
-            </div>
-
-            {/* In-Game Comic Feedback Popup ("PERFECT!", "GREAT!", "HIT!") */}
-            {feedbackText && (
-              <div
-                className="absolute -top-10 font-comic font-black text-2xl sm:text-3xl px-3 py-1 border-3 border-black shadow-[3px_3px_0px_0px_#1b1b20] -rotate-3 animate-impact-pop z-30"
-                style={{ backgroundColor: feedbackText.color, color: '#1b1b20' }}
-              >
-                <div>{feedbackText.text}</div>
-                {feedbackText.sub && (
-                  <div className="text-xs font-bold text-black uppercase tracking-wider">
-                    {feedbackText.sub}
-                  </div>
-                )}
-              </div>
-            )}
+              <ArrowLeft className="w-4 h-4" />
+              <span>EXIT TO ARCADE</span>
+            </button>
           </div>
         </div>
+      </div>
 
-        {/* Start Screen Overlay */}
-        {!isPlaying && !gameOver && (
-          <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-center p-6 text-white z-20">
-            <div className="bg-[#1b1b20] border-4 border-white p-6 max-w-md ink-shadow-red-multi">
-              <span className="text-4xl block mb-2">⚡</span>
-              <h3 className="font-comic text-3xl sm:text-4xl font-black uppercase text-[#facc15]">
-                SPIDER-SENSE DUEL
-              </h3>
-              <p className="font-comic text-xs sm:text-sm text-white/90 font-bold mt-2 leading-relaxed">
-                incoming hazards test your real-time reflexes! When danger enters the screen, react instantly with the corresponding maneuver!
+      {/* ================================================== */}
+      {/* 1. STAGE SELECTOR SCREEN (If inLevelSelect)        */}
+      {/* ================================================== */}
+      {inLevelSelect && (
+        <div className="border-4 border-[#1b1b20] bg-[#fffbf0] p-5 sm:p-7 ink-shadow-lg space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b-3 border-[#1b1b20] pb-4">
+            <div>
+              <h2 className="font-comic text-xl sm:text-2xl font-black uppercase text-[#1b1b20]">
+                SELECT REFLEX STAGE & DIFFICULTY
+              </h2>
+              <p className="font-comic text-xs text-[#5b403d] font-bold mt-0.5">
+                Dodge incoming attacks within millisecond windows to earn ⭐⭐⭐ stars and unlock boss climax stages!
               </p>
+            </div>
 
-              {/* Mode Selection Tabs */}
-              <div className="my-4 pt-3 border-t-2 border-white/20">
-                <span className="font-comic text-[11px] font-black text-white/70 uppercase block mb-1.5">
-                  SELECT DIFFICULTY MODE:
-                </span>
-                <div className="grid grid-cols-3 gap-2 font-comic text-xs font-black uppercase">
-                  {(['TRAINING', 'ARCADE', 'INSANE'] as GameDifficultyMode[]).map((mode) => (
+            {/* Difficulty Selector */}
+            <div className="flex items-center gap-1.5 bg-white border-2 border-[#1b1b20] p-1 ink-shadow-xs">
+              {(['EASY', 'NORMAL', 'HARD', 'SPIDER_SENSE'] as ArcadeDifficulty[]).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => {
+                    playSound('click');
+                    setDifficulty(d);
+                  }}
+                  className={`px-2.5 py-1 font-comic text-[10px] sm:text-xs font-black uppercase transition-all cursor-pointer ${
+                    difficulty === d
+                      ? 'bg-[#dc2626] text-white'
+                      : 'bg-transparent text-[#1b1b20] hover:bg-gray-100'
+                  }`}
+                >
+                  {d.replace('_', ' ')}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Level Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {SPIDER_SENSE_LEVELS.map((lvl) => {
+              const prog = levelProgress[lvl.id] || { unlocked: lvl.unlockedByDefault || false, stars: 0, bestScore: 0, fastestMs: 0 };
+              const isLocked = !prog.unlocked;
+
+              return (
+                <div
+                  key={lvl.id}
+                  className={`border-3 border-[#1b1b20] p-4 flex flex-col justify-between transition-all relative overflow-hidden ${
+                    isLocked
+                      ? 'bg-gray-100 opacity-60 border-dashed'
+                      : 'bg-white hover:bg-[#fffdf0] ink-shadow-md hover:scale-[1.01]'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="bg-[#1b1b20] text-white font-comic text-[10px] font-black px-2 py-0.5 uppercase">
+                        STAGE {lvl.id} • {lvl.threatCount} THREATS
+                      </span>
+                      {isLocked ? (
+                        <span className="flex items-center gap-1 font-comic text-[10px] font-black text-gray-500 uppercase">
+                          <Lock className="w-3 h-3" /> LOCKED
+                        </span>
+                      ) : (
+                        <div className="flex gap-1 text-[#facc15]">
+                          {[1, 2, 3].map((star) => (
+                            <Star
+                              key={star}
+                              className={`w-3.5 h-3.5 ${
+                                star <= prog.stars ? 'fill-[#facc15] text-[#facc15]' : 'text-gray-300'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <h3 className="font-comic text-lg font-black uppercase text-[#1b1b20] leading-tight">
+                      {lvl.name}
+                    </h3>
+                    <p className="font-comic text-[11px] font-black text-[#4338ca] uppercase">
+                      {lvl.subtitle}
+                    </p>
+                    <p className="text-xs text-[#5b403d] font-sans mt-2 line-clamp-2">
+                      {lvl.description}
+                    </p>
+
+                    <div className="mt-3 pt-2 border-t border-gray-200 grid grid-cols-2 gap-2 text-[10px] font-comic font-bold text-[#1b1b20]">
+                      <div>WINDOW: <span className="font-black text-[#dc2626]">{lvl.baseReactionWindow}s</span></div>
+                      <div>PERFECT TARGET: <span className="font-black text-[#facc15]">⭐ {lvl.perfectDodgeTarget}</span></div>
+                      <div>BEST SCORE: <span className="font-black">{prog.bestScore.toLocaleString()}</span></div>
+                      <div>XP REWARD: <span className="font-black text-[#16a34a]">+{lvl.xpReward} XP</span></div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t-2 border-[#1b1b20]">
                     <button
-                      key={mode}
                       type="button"
-                      onClick={() => setGameMode(mode)}
-                      className={`py-1.5 px-2 border-2 transition-all cursor-pointer ${
-                        gameMode === mode
-                          ? 'bg-[#dc2626] text-white border-white scale-105 shadow-sm'
-                          : 'bg-[#2a2a35] text-white/80 border-white/30 hover:bg-[#3a3a48]'
+                      disabled={isLocked}
+                      onClick={() => startLevel(lvl.id)}
+                      className={`w-full py-2 px-3 font-comic text-xs font-black uppercase flex items-center justify-center gap-1.5 transition-transform ${
+                        isLocked
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-[#4338ca] hover:bg-[#3730a3] text-white border-2 border-[#1b1b20] ink-btn cursor-pointer'
                       }`}
                     >
-                      {mode}
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>{isLocked ? 'LOCKED (CLEAR STAGE ' + (lvl.id - 1) + ')' : 'START STAGE'}</span>
                     </button>
-                  ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ================================================== */}
+      {/* 2. LIVE GAMEPLAY ARENA VIEWPORT                    */}
+      {/* ================================================== */}
+      {!inLevelSelect && (
+        <div className="border-4 sm:border-6 border-[#1b1b20] bg-black p-2 sm:p-4 ink-shadow-xl space-y-3">
+          {/* Top HUD Bar */}
+          <div className="bg-[#1b1b20] text-white p-2.5 sm:p-3 border-2 border-white/40 flex flex-wrap items-center justify-between gap-3 text-xs font-comic font-black uppercase">
+            <div className="flex items-center gap-3">
+              <span className="bg-[#4338ca] px-2 py-0.5 border border-white">
+                STAGE {currentLevelConfig.id}: {currentLevelConfig.name}
+              </span>
+              <span className="text-[#facc15]">
+                WAVE: <span className="text-white font-mono">{threatsCleared}/{currentLevelConfig.threatCount}</span>
+              </span>
+            </div>
+
+            {/* Lives Hearts */}
+            <div className="flex items-center gap-1">
+              <span>LIVES:</span>
+              <div className="flex gap-1 text-[#dc2626]">
+                {[1, 2, 3].map((l) => (
+                  <Heart
+                    key={l}
+                    className={`w-4 h-4 ${l <= lives ? 'fill-[#dc2626]' : 'text-gray-500'}`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <span>SCORE: <span className="text-[#38bdf8] font-mono">{score.toLocaleString()}</span></span>
+              <span className={`px-2 py-0.5 border ${combo > 1 ? 'bg-[#dc2626] text-white animate-pulse' : 'bg-white/10 text-white/70'}`}>
+                {combo}x COMBO
+              </span>
+              {fastestReactionSec && (
+                <span className="hidden sm:inline text-green-400">
+                  FASTEST: {fastestReactionSec.toFixed(3)}s
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPaused((prev) => !prev);
+                  playSound('click');
+                }}
+                className="bg-white hover:bg-gray-200 text-[#1b1b20] px-2.5 py-1 font-comic text-[11px] font-black border border-white cursor-pointer"
+              >
+                {isPaused ? 'RESUME' : 'PAUSE'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setInLevelSelect(true)}
+                className="bg-[#dc2626] hover:bg-[#b8121d] text-white px-2.5 py-1 font-comic text-[11px] font-black border border-white cursor-pointer"
+              >
+                STAGES
+              </button>
+            </div>
+          </div>
+
+          {/* Central Combat Radar Viewport */}
+          <div
+            className={`relative w-full h-[380px] sm:h-[450px] border-3 border-[#1b1b20] overflow-hidden select-none bg-radial from-[#1e1b4b] via-[#0f0919] to-black flex flex-col justify-between p-4 ${
+              screenShake ? 'shake-comic' : ''
+            }`}
+          >
+            {/* Halftone Overlay */}
+            <div className="comic-halftone absolute inset-0 opacity-15 pointer-events-none" />
+
+            {/* Spider-Sense Radar Ring Grid */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-[280px] h-[280px] rounded-full border-2 border-dashed border-[#4338ca]/30 animate-spin [animation-duration:30s]" />
+              <div className="w-[180px] h-[180px] rounded-full border border-dashed border-[#dc2626]/40 animate-spin [animation-duration:15s]" />
+              <div className="w-[90px] h-[90px] rounded-full border border-[#facc15]/30" />
+            </div>
+
+            {/* Top Feedback Banner */}
+            <div className="relative z-20 text-center min-h-[50px]">
+              {feedbackText && (
+                <div className="inline-block bg-[#1b1b20] border-2 border-white px-4 py-1.5 ink-shadow-sm animate-in zoom-in duration-150">
+                  <div className="font-comic text-sm sm:text-base font-black uppercase" style={{ color: feedbackText.color }}>
+                    {feedbackText.text}
+                  </div>
+                  {feedbackText.sub && (
+                    <div className="font-comic text-[10px] text-white/90 uppercase font-bold">
+                      {feedbackText.sub}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Center: Incoming Threat Trajectory & Spider-Man Arena */}
+            <div className="relative z-20 flex-1 flex items-center justify-center">
+              {/* Active Incoming Threat Card */}
+              {activeDanger && (
+                <div
+                  className={`absolute p-3 sm:p-4 bg-white border-3 border-[#1b1b20] text-[#1b1b20] ink-shadow-lg animate-in zoom-in duration-100 max-w-xs text-center z-30 ${
+                    activeDanger.direction === 'left' ? 'left-4 sm:left-12' :
+                    activeDanger.direction === 'right' ? 'right-4 sm:right-12' :
+                    activeDanger.direction === 'top' ? 'top-2' :
+                    'inset-x-auto'
+                  }`}
+                >
+                  <div className="bg-[#dc2626] text-white font-comic text-[10px] font-black px-2 py-0.5 uppercase mb-1 spidey-tingle-anim inline-block">
+                    ⚡ SPIDER-SENSE WARNING!
+                  </div>
+                  <div className="text-3xl my-1">{activeDanger.icon}</div>
+                  <h4 className="font-comic text-xs sm:text-sm font-black uppercase text-[#1b1b20] leading-tight">
+                    {activeDanger.name}
+                  </h4>
+                  <div className="mt-2 bg-[#facc15] text-[#1b1b20] font-comic text-xs font-black px-2.5 py-1 border border-[#1b1b20] uppercase animate-pulse">
+                    {activeDanger.actionHint}
+                  </div>
+                </div>
+              )}
+
+              {/* Spider-Man Center Hero Sprite */}
+              <div className="relative flex flex-col items-center">
+                {/* Radar Waves if Danger Active */}
+                {activeDanger && (
+                  <div className="absolute -inset-10 rounded-full border-4 border-[#dc2626] animate-ping opacity-75 pointer-events-none" />
+                )}
+
+                {/* Hero Character Sphere & Pose */}
+                <div
+                  className={`w-24 h-24 rounded-full border-4 border-[#1b1b20] flex items-center justify-center shadow-2xl transition-all duration-150 ${
+                    spideyPose === 'HIT' ? 'bg-[#991b1b] scale-90 rotate-12' :
+                    spideyPose === 'JUMP' ? 'bg-[#0284c7] -translate-y-8 scale-110' :
+                    spideyPose === 'DUCK' ? 'bg-[#b45309] translate-y-6 scale-95' :
+                    spideyPose === 'DODGE_L' ? 'bg-[#0284c7] -translate-x-8 -rotate-12' :
+                    spideyPose === 'DODGE_R' ? 'bg-[#0284c7] translate-x-8 rotate-12' :
+                    spideyPose === 'WEB' ? 'bg-[#facc15] scale-115' :
+                    'bg-[#dc2626]'
+                  }`}
+                >
+                  <div className="text-center">
+                    <span className="text-3xl">🕷️</span>
+                    <div className="font-comic text-[9px] font-black text-white uppercase mt-0.5">
+                      {spideyPose}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Countdown Overlay */}
+            {countdown !== null && (
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center pointer-events-none z-40 animate-in zoom-in duration-200">
+                <div className="text-center font-comic font-black text-white">
+                  <div className="text-7xl sm:text-9xl text-[#facc15] drop-shadow-[0_6px_0_#1b1b20]">
+                    {countdown}
+                  </div>
+                  <div className="text-xl sm:text-2xl uppercase tracking-widest text-[#dc2626]">
+                    BRACE YOUR SPIDER-SENSE!
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Level Victory Modal */}
+            {levelVictory && (
+              <div className="absolute inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+                <div className="bg-[#fffdf0] border-4 sm:border-6 border-[#1b1b20] p-6 max-w-md w-full text-center ink-shadow-2xl space-y-4 animate-in zoom-in duration-200">
+                  <div className="bg-[#16a34a] text-white font-comic text-xs font-black px-3 py-1 uppercase inline-block border-2 border-[#1b1b20] -rotate-2">
+                    REFLEX STAGE CLEARED!
+                  </div>
+                  <h3 className="font-comic text-3xl font-black uppercase text-[#1b1b20]">
+                    {currentLevelConfig.name}
+                  </h3>
+
+                  {/* Stars Won */}
+                  <div className="flex justify-center gap-2 text-[#facc15] my-2">
+                    {[1, 2, 3].map((star) => (
+                      <Star
+                        key={star}
+                        className={`w-8 h-8 ${
+                          star <= levelStarsWon ? 'fill-[#facc15] text-[#facc15] animate-bounce' : 'text-gray-300'
+                        }`}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="bg-white border-2 border-[#1b1b20] p-3 text-left font-comic text-xs font-bold text-[#1b1b20] space-y-1">
+                    <div className="flex justify-between">
+                      <span>THREATS CLEARED:</span>
+                      <span className="font-black text-[#dc2626]">{threatsCleared}/{currentLevelConfig.threatCount}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>FINAL SCORE:</span>
+                      <span className="font-black text-[#38bdf8]">{score.toLocaleString()} PTS</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>PERFECT DODGES:</span>
+                      <span className="font-black text-[#facc15]">⭐ {perfectDodges}/{currentLevelConfig.perfectDodgeTarget}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>FASTEST REACTION:</span>
+                      <span className="font-black text-[#16a34a]">{fastestReactionSec ? `${fastestReactionSec.toFixed(3)}s` : 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-gray-200 pt-1 text-[#16a34a]">
+                      <span>XP REWARD:</span>
+                      <span className="font-black">+{currentLevelConfig.xpReward} XP</span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 justify-center pt-2">
+                    <button
+                      type="button"
+                      onClick={() => startLevel(selectedLevelId)}
+                      className="bg-white text-[#1b1b20] border-2 border-[#1b1b20] px-4 py-2 font-comic text-xs font-black uppercase ink-btn cursor-pointer"
+                    >
+                      RETRY
+                    </button>
+                    {selectedLevelId < SPIDER_SENSE_LEVELS.length ? (
+                      <button
+                        type="button"
+                        onClick={() => startLevel(selectedLevelId + 1)}
+                        className="bg-[#4338ca] text-white border-2 border-[#1b1b20] px-5 py-2 font-comic text-xs font-black uppercase ink-btn flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <span>NEXT STAGE</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setInLevelSelect(true)}
+                        className="bg-[#16a34a] text-white border-2 border-[#1b1b20] px-5 py-2 font-comic text-xs font-black uppercase ink-btn cursor-pointer"
+                      >
+                        STAGE SELECT
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Game Over Modal */}
+            {gameOver && (
+              <div className="absolute inset-0 bg-black/85 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+                <div className="bg-[#fffdf0] border-4 sm:border-6 border-[#1b1b20] p-6 text-center max-w-sm w-full ink-shadow-2xl space-y-4 animate-in zoom-in duration-200">
+                  <div className="bg-[#dc2626] text-white font-comic text-xs font-black px-3 py-1 uppercase inline-block border-2 border-[#1b1b20] rotate-2">
+                    REFLEX OVERLOAD!
+                  </div>
+                  <h3 className="font-comic text-2xl font-black uppercase text-[#1b1b20]">
+                    KNOCKED OUT!
+                  </h3>
+                  <p className="font-comic text-xs font-bold text-[#5b403d]">
+                    Threats Cleared: <span className="text-[#dc2626] font-black">{threatsCleared}</span> • Score: <span className="text-[#38bdf8] font-black">{score.toLocaleString()}</span>
+                  </p>
+
+                  <div className="flex gap-2 justify-center pt-2">
+                    <button
+                      type="button"
+                      onClick={() => startLevel(selectedLevelId)}
+                      className="bg-[#dc2626] text-white border-2 border-[#1b1b20] px-5 py-2 font-comic text-xs font-black uppercase ink-btn flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      <span>TRY AGAIN</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInLevelSelect(true)}
+                      className="bg-white text-[#1b1b20] border-2 border-[#1b1b20] px-4 py-2 font-comic text-xs font-black uppercase ink-btn cursor-pointer"
+                    >
+                      STAGES
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom On-Screen Tactile Action Controls (Responsive Mobile & Desktop) */}
+          <div className="bg-[#fffbf0] border-2 border-[#1b1b20] p-3 space-y-3">
+            {/* Top row: Spider-Sense Slow-Mo Trigger */}
+            <div className="flex items-center justify-between gap-3 bg-white p-2 border border-[#1b1b20]">
+              <div className="flex items-center gap-2 flex-1">
+                <div className="w-7 h-7 rounded-full bg-[#facc15] border border-[#1b1b20] flex items-center justify-center text-xs">
+                  ⚡
+                </div>
+                <div className="flex-1">
+                  <div className="flex justify-between text-[10px] font-comic font-black uppercase">
+                    <span>SPIDER-SENSE TIME WARP</span>
+                    <span>{spiderSenseEnergy}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 h-2.5 border border-[#1b1b20]">
+                    <div
+                      className="h-full bg-gradient-to-r from-[#facc15] to-[#4338ca] transition-all"
+                      style={{ width: `${spiderSenseEnergy}%` }}
+                    />
+                  </div>
                 </div>
               </div>
 
               <button
                 type="button"
-                onClick={() => startGame(gameMode)}
-                className="w-full py-3 bg-[#dc2626] hover:bg-[#b8121d] text-white font-comic text-base font-black uppercase border-3 border-white shadow-[4px_4px_0px_0px_#1b1b20] cursor-pointer ink-btn"
+                onClick={triggerSpiderSenseSlowMo}
+                disabled={spiderSenseEnergy < 40 || isSlowMoActive}
+                className="bg-[#4338ca] hover:bg-[#3730a3] disabled:opacity-40 text-white border-2 border-[#1b1b20] px-3 py-1 font-comic text-[10px] font-black uppercase ink-btn cursor-pointer"
               >
-                COMMENCE REFLEX TEST →
+                SLOW-MO [E]
+              </button>
+            </div>
+
+            {/* Responsive On-Screen Action Buttons Grid */}
+            <div className="grid grid-cols-5 gap-2 font-comic text-xs font-black uppercase">
+              <button
+                type="button"
+                onClick={() => handleAction('LEFT')}
+                className="bg-white hover:bg-[#ffdf9f] text-[#1b1b20] border-2 border-[#1b1b20] py-3.5 px-2 flex flex-col items-center justify-center ink-btn ink-shadow-xs active:scale-95 cursor-pointer"
+              >
+                <span className="text-base">←</span>
+                <span className="text-[10px] mt-0.5">LEFT [A]</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleAction('JUMP')}
+                className="bg-[#0284c7] hover:bg-[#0369a1] text-white border-2 border-[#1b1b20] py-3.5 px-2 flex flex-col items-center justify-center ink-btn ink-shadow-xs active:scale-95 cursor-pointer"
+              >
+                <span className="text-base">↑</span>
+                <span className="text-[10px] mt-0.5">JUMP [W]</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleAction('WEB')}
+                className="bg-[#dc2626] hover:bg-[#b8121d] text-white border-2 border-[#1b1b20] py-3.5 px-2 flex flex-col items-center justify-center ink-btn ink-shadow-xs active:scale-95 cursor-pointer"
+              >
+                <span className="text-base">🕸️</span>
+                <span className="text-[10px] mt-0.5">WEB [SPACE]</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleAction('DUCK')}
+                className="bg-[#b45309] hover:bg-[#92400e] text-white border-2 border-[#1b1b20] py-3.5 px-2 flex flex-col items-center justify-center ink-btn ink-shadow-xs active:scale-95 cursor-pointer"
+              >
+                <span className="text-base">↓</span>
+                <span className="text-[10px] mt-0.5">DUCK [S]</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleAction('RIGHT')}
+                className="bg-white hover:bg-[#ffdf9f] text-[#1b1b20] border-2 border-[#1b1b20] py-3.5 px-2 flex flex-col items-center justify-center ink-btn ink-shadow-xs active:scale-95 cursor-pointer"
+              >
+                <span className="text-base">→</span>
+                <span className="text-[10px] mt-0.5">RIGHT [D]</span>
               </button>
             </div>
           </div>
-        )}
-
-        {/* Game Over Screen */}
-        {gameOver && (
-          <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center text-center p-6 text-white z-30 animate-impact-pop">
-            <div className="bg-[#1b1b20] border-4 sm:border-6 border-white p-6 sm:p-8 max-w-lg w-full ink-shadow-red-multi">
-              <div className="bg-[#dc2626] text-white font-comic font-black text-2xl sm:text-3xl px-4 py-1 border-3 border-white inline-block -rotate-2 mb-2">
-                💥 SENSES OVERLOADED!
-              </div>
-
-              <h3 className="font-comic text-xl sm:text-2xl font-black uppercase text-white mt-1">
-                REFLEX DUEL FINISHED
-              </h3>
-
-              {isNewHighScore && (
-                <div className="bg-[#facc15] text-[#1b1b20] font-comic text-xs font-black py-1 px-3 border border-black mt-1 uppercase inline-block">
-                  🏆 NEW HIGH SCORE!
-                </div>
-              )}
-
-              {/* Stats Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 my-5 text-left font-comic">
-                <div className="bg-[#2a2a35] p-2 border border-white/20">
-                  <span className="text-[10px] text-white/60 uppercase block">SCORE</span>
-                  <span className="text-lg font-black text-[#facc15]">{score.toLocaleString()}</span>
-                </div>
-                <div className="bg-[#2a2a35] p-2 border border-white/20">
-                  <span className="text-[10px] text-white/60 uppercase block">BEST COMBO</span>
-                  <span className="text-lg font-black text-white">x{maxCombo}</span>
-                </div>
-                <div className="bg-[#2a2a35] p-2 border border-white/20">
-                  <span className="text-[10px] text-white/60 uppercase block">FASTEST</span>
-                  <span className="text-lg font-black text-[#38bdf8]">
-                    {stats.fastestReaction}s
-                  </span>
-                </div>
-                <div className="bg-[#2a2a35] p-2 border border-white/20">
-                  <span className="text-[10px] text-white/60 uppercase block">AVERAGE</span>
-                  <span className="text-lg font-black text-[#22c55e]">
-                    {stats.averageReaction}s
-                  </span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => startGame(gameMode)}
-                  className="w-full sm:flex-1 py-2.5 bg-[#dc2626] hover:bg-[#b8121d] text-white font-comic text-sm font-black uppercase border-2 border-white shadow-[3px_3px_0px_0px_#1b1b20] cursor-pointer flex items-center justify-center gap-1.5 ink-btn"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  <span>PLAY AGAIN</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={onBackToArcade}
-                  className="w-full sm:flex-1 py-2.5 bg-white hover:bg-[#eaeaea] text-[#1b1b20] font-comic text-sm font-black uppercase border-2 border-[#1b1b20] shadow-[3px_3px_0px_0px_#1b1b20] cursor-pointer flex items-center justify-center gap-1.5 ink-btn"
-                >
-                  <span>BACK TO ARCADE</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* MOBILE & DESKTOP 5-WAY TOUCH CONTROLS */}
-      <div className="border-4 sm:border-5 border-[#1b1b20] bg-white p-3 sm:p-4 depth-shadow-comic">
-        <div className="flex items-center justify-between mb-2">
-          <span className="font-comic text-xs font-black text-[#5b403d] uppercase">
-            REFLEX CONTROLS (TAP OR KEYBOARD):
-          </span>
-          <span className="font-comic text-[10px] font-bold text-[#1b1b20] uppercase hidden sm:inline">
-            KEYBOARD: ←, →, ↑, ↓, SPACE
-          </span>
         </div>
-
-        {/* 5 Large, Comfortable Comic Action Buttons */}
-        <div className="grid grid-cols-5 gap-2 sm:gap-3 font-comic">
-          <button
-            type="button"
-            disabled={!isPlaying || gameOver}
-            onClick={() => handleAction('LEFT')}
-            className="p-3 sm:p-4 bg-[#f0ece1] hover:bg-[#38bdf8] hover:text-white disabled:opacity-40 border-3 border-[#1b1b20] shadow-[2px_2px_0px_0px_#1b1b20] active:scale-95 transition-all text-center flex flex-col items-center justify-center cursor-pointer"
-          >
-            <span className="text-xl sm:text-2xl">←</span>
-            <span className="text-[10px] sm:text-xs font-black uppercase mt-1">LEFT</span>
-          </button>
-
-          <button
-            type="button"
-            disabled={!isPlaying || gameOver}
-            onClick={() => handleAction('RIGHT')}
-            className="p-3 sm:p-4 bg-[#f0ece1] hover:bg-[#38bdf8] hover:text-white disabled:opacity-40 border-3 border-[#1b1b20] shadow-[2px_2px_0px_0px_#1b1b20] active:scale-95 transition-all text-center flex flex-col items-center justify-center cursor-pointer"
-          >
-            <span className="text-xl sm:text-2xl">→</span>
-            <span className="text-[10px] sm:text-xs font-black uppercase mt-1">RIGHT</span>
-          </button>
-
-          <button
-            type="button"
-            disabled={!isPlaying || gameOver}
-            onClick={() => handleAction('JUMP')}
-            className="p-3 sm:p-4 bg-[#fefce8] hover:bg-[#facc15] disabled:opacity-40 border-3 border-[#1b1b20] shadow-[2px_2px_0px_0px_#1b1b20] active:scale-95 transition-all text-center flex flex-col items-center justify-center cursor-pointer"
-          >
-            <span className="text-xl sm:text-2xl">↑</span>
-            <span className="text-[10px] sm:text-xs font-black uppercase text-[#854d0e] mt-1">JUMP</span>
-          </button>
-
-          <button
-            type="button"
-            disabled={!isPlaying || gameOver}
-            onClick={() => handleAction('DUCK')}
-            className="p-3 sm:p-4 bg-[#fefce8] hover:bg-[#facc15] disabled:opacity-40 border-3 border-[#1b1b20] shadow-[2px_2px_0px_0px_#1b1b20] active:scale-95 transition-all text-center flex flex-col items-center justify-center cursor-pointer"
-          >
-            <span className="text-xl sm:text-2xl">↓</span>
-            <span className="text-[10px] sm:text-xs font-black uppercase text-[#854d0e] mt-1">DUCK</span>
-          </button>
-
-          <button
-            type="button"
-            disabled={!isPlaying || gameOver}
-            onClick={() => handleAction('WEB')}
-            className="p-3 sm:p-4 bg-[#fff0f0] hover:bg-[#dc2626] hover:text-white disabled:opacity-40 border-3 border-[#1b1b20] shadow-[2px_2px_0px_0px_#1b1b20] active:scale-95 transition-all text-center flex flex-col items-center justify-center cursor-pointer"
-          >
-            <span className="text-xl sm:text-2xl">🕸️</span>
-            <span className="text-[10px] sm:text-xs font-black uppercase text-[#991b1b] mt-1">WEB</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Footer Stats and Like Button */}
-      <div className="border-4 border-[#1b1b20] bg-white p-4 depth-shadow-comic flex flex-wrap items-center justify-between gap-4 font-comic">
-        <div className="flex items-center gap-3 text-xs font-bold text-[#5b403d]">
-          <span className="font-black text-[#1b1b20] uppercase">TIMING RANKS:</span>
-          <span>⚡ &lt;0.30s PERFECT (+250 XP) • ✓ 0.30-0.60s GREAT (+150 XP) • 0.60-0.90s GOOD (+75 XP)</span>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <LikeButton id="game-spider-sense" initialLikes={2150} label="LIKE GAME" compact />
-          <div className="bg-[#f0ece1] border-2 border-[#1b1b20] px-3 py-1 text-xs font-black uppercase">
-            🏆 BEST: {stats.highestScore.toLocaleString()} PTS (⚡ {stats.fastestReaction}s)
-          </div>
-        </div>
-      </div>
+      )}
     </section>
   );
 };

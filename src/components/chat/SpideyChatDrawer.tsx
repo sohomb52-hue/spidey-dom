@@ -308,7 +308,11 @@ export const SpideyChatDrawer: React.FC<SpideyChatDrawerProps> = ({
       });
 
       if (!response.ok) {
-        throw new Error(`Server returned HTTP ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 503 || errorData?.code === 'API_KEY_MISSING') {
+          throw new Error('GEMINI_API_KEY is not configured on the server deployment. Please add GEMINI_API_KEY in your deployment environment variables.');
+        }
+        throw new Error(errorData?.error || `Server returned HTTP ${response.status}`);
       }
 
       const data = await response.json();
@@ -332,10 +336,14 @@ export const SpideyChatDrawer: React.FC<SpideyChatDrawerProps> = ({
       console.error('Gemini chat request error:', err);
       playSfx('bam');
 
+      const userDisplayError = err?.message?.includes('GEMINI_API_KEY')
+        ? '⚡ Spider-Sense detected: GEMINI_API_KEY is missing on the server deployment. Please configure GEMINI_API_KEY in your deployment environment variables.'
+        : '⚡ Spider-Sense detected a connection problem. Try again in a moment.';
+
       const errorMsg: ChatMessage = {
         id: `err-${Date.now()}`,
         sender: 'spidey',
-        text: '🕷️ SPIDER-SENSE INTERRUPTED\n\n"My web connection just snapped. Give me another shot."',
+        text: userDisplayError,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isError: true,
         retryPrompt: textToSend,
@@ -389,6 +397,7 @@ export const SpideyChatDrawer: React.FC<SpideyChatDrawerProps> = ({
       {/* ================================================== */}
       <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2">
         <button
+          type="button"
           onClick={() => {
             playSfx('thwip');
             if (isOpen) {
@@ -397,7 +406,7 @@ export const SpideyChatDrawer: React.FC<SpideyChatDrawerProps> = ({
               onOpen();
             }
           }}
-          className={`group relative p-2 pr-4 bg-gradient-to-r from-[#dc2626] via-[#b8121d] to-[#991b1b] text-white border-3 border-[#1b1b20] rounded-full ink-shadow-lg flex items-center gap-2.5 hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+          className={`group relative p-2 pr-4 bg-gradient-to-r from-[#dc2626] via-[#b8121d] to-[#991b1b] text-white border-3 border-[#1b1b20] rounded-full ink-shadow-lg flex items-center gap-2.5 hover:scale-105 active:scale-95 transition-all cursor-pointer touch-manipulation select-none ${
             tingleBurst ? 'ring-4 ring-[#facc15] scale-110' : ''
           }`}
           title="Chat with Spidey - Open-Ended AI Companion"
@@ -635,8 +644,8 @@ export const SpideyChatDrawer: React.FC<SpideyChatDrawerProps> = ({
                           <AlertTriangle className="w-3.5 h-3.5" />
                           <span>SPIDER-SENSE INTERRUPTED</span>
                         </div>
-                        <p className="text-xs font-medium text-[#1b1b20]">
-                          "My web connection just snapped. Give me another shot."
+                        <p className="text-xs font-medium text-[#1b1b20] leading-snug">
+                          {msg.text}
                         </p>
                         {msg.retryPrompt && (
                           <button

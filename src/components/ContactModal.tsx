@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Send, Newspaper, CheckCircle, AlertTriangle } from 'lucide-react';
 import { playSound } from '../utils/audio';
 
@@ -13,6 +13,13 @@ export const ContactModal: React.FC<ContactModalProps> = ({ isOpen, onClose }) =
   const [category, setCategory] = useState('Scoop / Sighting');
   const [message, setMessage] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      document.body.classList.add('modal-open');
+      return () => document.body.classList.remove('modal-open');
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

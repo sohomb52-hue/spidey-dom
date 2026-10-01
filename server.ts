@@ -12,125 +12,106 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
-app.use(express.json());
+// Enable CORS and Preflight for all origins and hosting platforms
+app.use((_req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  if (_req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
 
-// Initialize Gemini client using @google/genai
-const apiKey = process.env.GEMINI_API_KEY;
-const ai = apiKey
-  ? new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// Helper to retrieve the active Gemini API key from environment variables
+function getGeminiApiKey(): string | undefined {
+  return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
+}
+
+// Helper to obtain an authenticated GoogleGenAI client instance
+function getGeminiClient(): GoogleGenAI | null {
+  const key = getGeminiApiKey();
+  if (!key || !key.trim()) {
+    return null;
+  }
+  return new GoogleGenAI({
+    apiKey: key.trim(),
+    httpOptions: {
+      headers: {
+        'User-Agent': 'spiderverse-fact-attack/1.0.0',
       },
-    })
-  : null;
+    },
+  });
+}
 
 const SPIDEY_SYSTEM_INSTRUCTION = `
 You are SPIDEY, an AI companion inside the SPIDER-VERSE FACT ATTACK website.
 
 You are inspired by the witty, playful and sarcastic personality associated with Spider-Man, but you are an AI assistant and should not claim to literally be the fictional character.
 
-Your job is to have natural conversations with users.
+Your job is to have natural, engaging conversations with users about Spider-Man lore, trivia, the website, and general topics.
 
 You can discuss:
-- Spider-Man comics
-- characters
-- villains
-- powers
-- storylines
-- canon
-- alternate universes
-- movies
-- animation
-- games
-- trivia
-- the Spider-Verse Fact Attack website
-- its arcade games
-- its Canon Archives
-- the user's gameplay progress when that information is available
+- Spider-Man comics (Earth-616, Ultimate Universe Earth-1610, Earth-6160, Earth-65 Spider-Gwen, 2099, Noir, Spider-Punk, Spider-Ham, etc.)
+- Characters, rogues gallery (Green Goblin, Doc Ock, Venom, Carnage, Kingpin, Kraven, Mysterio, etc.)
+- Storylines, canon, crossovers (Secret Wars, Spider-Verse, Clone Saga, Kraven's Last Hunt, Maximum Carnage)
+- Movies (Raimi trilogy, Webb films, MCU Spider-Man, Spider-Verse animated films)
+- Video games (Insomniac Earth-1048, classic arcade)
+- Alternate universes and multiverse lore
+- The SPIDER-VERSE FACT ATTACK website, its Arcade games, and Canon Archives
+- User progress, streaks, XP, and badges when provided in context
+- General knowledge questions (math, science, everyday questions, jokes) with your signature witty comic flair
 
-PERSONALITY:
-Be:
-- witty
-- friendly
-- clever
-- playful
-- conversational
-- occasionally sarcastic
-- helpful
-- concise when appropriate
-- detailed when requested
+PERSONALITY & TONE:
+- Witty, friendly, clever, playful, conversational, and occasionally sarcastic.
+- Helpful and enthusiastic about comic lore.
+- Concise when appropriate (1–3 paragraphs), detailed when the user asks for in-depth explanation.
+- Do NOT force a Spider-Man pun into every sentence; use humor naturally.
 
-Do NOT force a Spider-Man joke into every response. Use humor naturally.
+CONVERSATION & FOLLOW-UP CONTINUITY:
+- Maintain context across follow-up questions (e.g. if the user asked about Venom and follows up with "What about Eddie?", understand that they mean Eddie Brock and his bond with the symbiote).
+- Understand single-word queries ("Why?", "Explain", "Who?", "Really?") by analyzing previous messages.
+- Respond naturally to general queries:
+  * "Hey" / "Hello" -> Greet warmly with a friendly neighborhood greeting.
+  * "What is 2+2?" -> "4! Even without spider-powers, the math checks out."
+  * "Tell me something funny" -> Share a witty quip or amusing comic book moment.
+  * "I'm bored" -> Suggest a challenge in the Arcade (Web Swing or Spider-Sense Reaction) or Canon Archives.
+  * "Give me a difficult Spider-Man question" -> Present a genuine, deep-cut comic trivia question.
 
-NATURAL CONVERSATION:
-- Understand follow-up questions.
-- Understand pronouns and conversational references (e.g. if the previous message was about Venom and the user asks "Who created him?" or "Was he always evil?", understand that "he/him" refers to Venom/Eddie Brock).
-- Understand incomplete questions and single-word questions like "Why?", "What do you mean?", "Explain your previous answer."
-- Understand slang, casual language, and spelling mistakes.
-- Understand questions that aren't specifically about Spider-Man. For example:
-  * "what's 2+2" -> "4. Sadly, no spider powers required for this one."
-  * "What's the capital of France?" -> "Paris. 🕷️ No web-swinging required to get there."
-  * "I'm bored" -> Respond naturally and suggest something relevant from the website (like Web Swing in the Arcade or Web of History in Canon Archives).
-  * "tell me something cool" -> Generate a genuinely interesting fact or story rather than searching for a canned phrase.
-  * "why" -> Use the previous conversation to determine what "why" refers to.
-
-CANON ACCURACY:
-When discussing Spider-Man, accurately distinguish between:
-- EARTH-616 (Main Marvel Comics continuity)
-- ULTIMATE UNIVERSE / EARTH-1610 (and modern Earth-6160)
-- EARTH-65 (Spider-Gwen / Ghost-Spider)
-- OTHER ALTERNATE UNIVERSES (Earth-928 Miguel O'Hara 2099, Earth-138 Spider-Punk, Earth-8311 Spider-Ham, etc.)
-- MCU (Earth-199999)
-- SONY FILMS (Raimi trilogy, Webb Amazing Spider-Man)
-- ANIMATED FILMS (Spider-Verse Spider-Society)
-- VIDEO GAMES (Insomniac Earth-1048)
-
-Never automatically treat a movie event as comic canon. If continuity matters, explain it.
-If you are uncertain: "I'm not completely sure about that continuity detail, so I don't want to web-sling you into misinformation."
-Never fabricate comic issues, publication dates, quotes, characters, story events, powers, or canon status.
-
-WEBSITE AWARENESS:
-The website SPIDER-VERSE FACT ATTACK includes:
-- 🕸️ CANON ARCHIVES: Contains classified case files of pivotal Spider-Man events with the interactive 'Web of History' timeline mode connecting chronological milestones across eras (Silver, Bronze, Modern, Spider-Verse).
-- 🎮 ARCADE: Features playable arcade machines:
-  1. 🕸️ WEB SWING: Side-scrolling physics swing game where you stay in the air, dodge obstacles, collect spider tokens, and use Spider-Sense reaction to achieve combos.
-  2. ⚡ SPIDER-SENSE REACTION TEST: Test reflexes in milliseconds against incoming villains like Green Goblin, Doc Ock, and Rhino with PERFECT dodge timing.
-  3. 🎯 WEB THROWER 3D: Rooftop target shooting simulation locking onto villains.
-  4. 🕵️ MULTIVERSE IDENTI-MATCH: Character detective lineup testing knowledge of Spider-variants.
-  5. 💥 CANON FACT ATTACK: Fast-paced canon quiz challenges.
-  6. 🌐 WEB OF KNOWLEDGE: Deep-dive trivia grid.
-- 🧠 TRIVIA MODES: Speed Mode countdown, Who Said It quote guessing, and Who Is It character detective.
-- 🏆 USER PROGRESS & VAULT: Player dossier with XP, streak, canon facts discovered, and unlockable achievement badges.
-
-GAME AWARENESS & ADVICE:
-- If user asks what to play, recommend something from the Arcade or Trivia modes.
-- If user asks how to improve in Web Swing, advise on swing release timing (releasing near bottom of arc to carry forward velocity) and not risking a crash for every single token.
-- Only use actual available user statistics if provided in context; never invent stats.
-
-RESPONSE FORMAT:
-Keep normal responses around 1–4 short paragraphs.
-Use longer responses when the user asks "Explain in detail" or "Tell me everything".
-Use markdown formatting (bolding, bullet points) when helpful.
+CANON DISCIPLINE:
+- Distinguish clearly between Marvel Comics 616 continuity, movie continuities, and alternate universes.
+- If a detail is continuity-specific or disputed, mention which universe or run it comes from.
+- Never invent fake issue numbers or non-existent storylines.
 `;
 
-// Helper: Call Gemini with robust multi-model fallback and retry
-async function callGemini(contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>, systemInstruction: string) {
-  if (!ai) {
+// Helper: Call Gemini with robust multi-model fallback and retry cascade
+async function generateSpideyResponse(
+  contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>,
+  systemInstruction: string
+): Promise<string> {
+  const client = getGeminiClient();
+  if (!client) {
     throw new Error('GEMINI_API_KEY is not configured on the server.');
   }
 
-  // Model cascade: try fast models in priority order
-  const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-flash-latest'];
+  // Model cascade: try fast and widely available Gemini models
+  const modelsToTry = [
+    'gemini-2.5-flash',
+    'gemini-3.7-flash',
+    'gemini-3.1-flash-lite',
+    'gemini-2.5-pro',
+    'gemini-flash-latest',
+  ];
   let lastError: any = null;
 
   for (const model of modelsToTry) {
     try {
-      const response = await ai.models.generateContent({
+      const response = await client.models.generateContent({
         model,
         contents,
         config: {
@@ -141,18 +122,17 @@ async function callGemini(contents: Array<{ role: 'user' | 'model'; parts: Array
       });
 
       const text = response.text;
-      if (text) {
-        return text;
+      if (text && typeof text === 'string' && text.trim()) {
+        return text.trim();
       }
     } catch (err: any) {
-      console.warn(`Gemini generation with ${model} encountered an issue:`, err?.message || err);
+      console.warn(`[Gemini API] Model ${model} failed, attempting next model in cascade:`, err?.message || err);
       lastError = err;
-      // Brief pause before trying next candidate model
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 150));
     }
   }
 
-  throw lastError || new Error('All Gemini model endpoints failed.');
+  throw lastError || new Error('All Gemini model candidates failed to return a response.');
 }
 
 // Spidey Chat API Endpoint: Pure dynamic Gemini AI conversation
@@ -160,42 +140,58 @@ app.post('/api/chat', async (req, res) => {
   try {
     const { message, history, userStats } = req.body;
 
-    if (!message || typeof message !== 'string') {
-      return res.status(400).json({ error: 'Message string is required.' });
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ error: 'A non-empty message string is required.' });
     }
 
-    if (!apiKey || !ai) {
-      console.error('Gemini API key is not configured.');
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+      console.error('[Spidey API] GEMINI_API_KEY is missing from environment variables.');
       return res.status(503).json({
-        error: 'Gemini AI service is not configured.',
+        error: 'Gemini AI service is not configured. GEMINI_API_KEY environment variable is missing on the server.',
         code: 'API_KEY_MISSING',
       });
     }
 
-    // Build conversation contents maintaining full conversational context
+    // Sanitize and build conversational turn history (alternating user/model)
     const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
 
     if (Array.isArray(history)) {
-      for (const item of history.slice(-14)) {
+      for (const item of history.slice(-16)) {
         if (item && item.role && item.parts && Array.isArray(item.parts) && item.parts[0]?.text) {
-          contents.push({
-            role: item.role === 'user' ? 'user' : 'model',
-            parts: [{ text: item.parts[0].text }],
-          });
+          const role = item.role === 'user' ? 'user' : 'model';
+          const text = String(item.parts[0].text).trim();
+          if (text) {
+            // Avoid duplicate consecutive roles
+            if (contents.length > 0 && contents[contents.length - 1].role === role) {
+              contents[contents.length - 1].parts[0].text += `\n${text}`;
+            } else {
+              contents.push({ role, parts: [{ text }] });
+            }
+          }
         } else if (item && item.sender && item.text) {
-          contents.push({
-            role: item.sender === 'user' ? 'user' : 'model',
-            parts: [{ text: item.text }],
-          });
+          const role = item.sender === 'user' ? 'user' : 'model';
+          const text = String(item.text).trim();
+          if (text) {
+            if (contents.length > 0 && contents[contents.length - 1].role === role) {
+              contents[contents.length - 1].parts[0].text += `\n${text}`;
+            } else {
+              contents.push({ role, parts: [{ text }] });
+            }
+          }
         }
       }
     }
 
-    // Add current user message
-    contents.push({
-      role: 'user',
-      parts: [{ text: message }],
-    });
+    // Ensure the latest message is added as a user turn
+    if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
+      contents[contents.length - 1].parts[0].text += `\n${message.trim()}`;
+    } else {
+      contents.push({
+        role: 'user',
+        parts: [{ text: message.trim() }],
+      });
+    }
 
     // Append user stats to system instruction if provided
     let dynamicSystemInstruction = SPIDEY_SYSTEM_INSTRUCTION;
@@ -204,17 +200,17 @@ app.post('/api/chat', async (req, res) => {
     }
 
     // Generate real open-ended AI response via Gemini API
-    const reply = await callGemini(contents, dynamicSystemInstruction);
+    const reply = await generateSpideyResponse(contents, dynamicSystemInstruction);
 
     return res.json({
       reply,
       source: 'gemini',
     });
   } catch (err: any) {
-    console.error('Error generating Gemini response in /api/chat:', err);
+    console.error('[Spidey API] Error generating Gemini response in /api/chat:', err);
     return res.status(500).json({
       error: 'Gemini generation failed',
-      details: err?.message || 'Unknown error',
+      details: err?.message || 'Internal server error',
     });
   }
 });
@@ -233,8 +229,6 @@ async function startServer() {
       res.sendFile(indexPath);
     });
   } else {
-    // If not in production OR if dist was not built (e.g. Render build command omitted npm run build),
-    // mount Vite middleware dynamically so the app always renders without crashing with ENOENT!
     if (isProd) {
       console.warn(
         '⚠️ Warning: dist/index.html was not found in production mode. ' +
@@ -255,7 +249,7 @@ async function startServer() {
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`🕷️ Spider-Verse Fact Attack server running on port ${PORT}`);
   });
 }

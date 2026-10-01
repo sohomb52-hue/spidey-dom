@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { X, BookOpen, Award, Sparkles, Shield, Heart } from 'lucide-react';
 import { ComicsCodeSeal } from './icons/SpiderVerseBadges';
 import { playSound } from '../utils/audio';
@@ -14,6 +14,13 @@ export const AboutModal: React.FC<AboutModalProps> = ({
   onClose,
   onReplayIntro
 }) => {
+  useEffect(() => {
+    if (isOpen) {
+      document.body.classList.add('modal-open');
+      return () => document.body.classList.remove('modal-open');
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
