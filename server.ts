@@ -55,12 +55,12 @@ You are SPIDEY, an expert Spider-Verse AI companion and assistant with live Goog
 You are inspired by the witty, playful, and sharp personality associated with Spider-Man, but you are a capable AI assistant with real-time web knowledge.
 
 CAPABILITIES:
-1. Live Web Grounding: You have access to real-time Google Search to look up current information, breaking news, box office data, latest comic releases, MCU updates, weather, and real-world facts.
+1. Live Web Grounding: You have access to real-time search to look up current information, breaking news, box office data, latest comic releases, MCU updates, weather, and real-world facts.
 2. Spider-Man & Comic Lore: Earth-616, Ultimate Universe (Earth-1610 / Earth-6160), Earth-65 (Ghost-Spider), Spider-Man 2099, Spider-Noir, Spider-Punk, Rogues Gallery, and crossover events.
 3. Spider-Verse Fact Attack Website: Help users navigate Arcade games (Web Swing, Spider-Sense Reaction, Web Thrower), Canon Archives, Badges Vault, and Trivia modes.
 4. General Knowledge: Answer science, technology, pop culture, math, and everyday queries accurately with high-precision information and your signature witty comic flair.
 
-TONE & CITATION BEHAVIOR:
+TONE & BEHAVIOR:
 - Witty, friendly, enthusiastic, and helpful.
 - Accurate and grounded: when answering questions about current events, latest media, or specific trivia, synthesize search results seamlessly.
 - Concise by default (1–3 paragraphs), detailed when the user requests in-depth analysis.
@@ -78,26 +78,74 @@ export interface GeminiChatResponse {
   source: 'gemini';
 }
 
-// Helper: Call Gemini with Google Search Grounding and multi-model fallback cascade
+// Helper: Real-time Live Web Search fetcher
+async function fetchLiveWebSearch(query: string): Promise<{ snippets: string[]; sources: GroundingSource[] }> {
+  try {
+    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      },
+    });
+
+    if (!res.ok) {
+      return { snippets: [], sources: [] };
+    }
+
+    const html = await res.text();
+    const titleLinkMatches = [...html.matchAll(/<h2[^>]*class="result__title"[^>]*>[\s\S]*?<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g)];
+    const snippetMatches = [...html.matchAll(/<a[^>]*class="result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/g)];
+
+    const sources: GroundingSource[] = [];
+    const snippets: string[] = [];
+    const seenUrls = new Set<string>();
+
+    for (let i = 0; i < Math.min(titleLinkMatches.length, 5); i++) {
+      let rawUrl = titleLinkMatches[i][1];
+      const title = titleLinkMatches[i][2].replace(/<[^>]+>/g, '').trim();
+
+      if (rawUrl.includes('uddg=')) {
+        const match = rawUrl.match(/uddg=([^&]+)/);
+        if (match) {
+          rawUrl = decodeURIComponent(match[1]);
+        }
+      }
+
+      if (rawUrl.startsWith('http') && !seenUrls.has(rawUrl)) {
+        seenUrls.add(rawUrl);
+        sources.push({ title: title || rawUrl, url: rawUrl });
+      }
+
+      if (snippetMatches[i]) {
+        const text = snippetMatches[i][1].replace(/<[^>]+>/g, '').trim();
+        if (text) {
+          snippets.push(text);
+        }
+      }
+    }
+
+    return { snippets, sources };
+  } catch (err) {
+    console.warn('[Web Search Fallback] Search fetch warning:', err);
+    return { snippets: [], sources: [] };
+  }
+}
+
+// Helper: Call Gemini with Google Search Grounding and reliable multi-model fallback cascade
 async function generateGroundedResponse(
   contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>,
-  systemInstruction: string
+  systemInstruction: string,
+  userMessage: string
 ): Promise<GeminiChatResponse> {
   const client = getGeminiClient();
   if (!client) {
     throw new Error('GEMINI_API_KEY is not configured on the server.');
   }
 
-  // Primary model is gemini-2.5-flash with search grounding; fallbacks in cascade
-  const modelsToTry = [
-    'gemini-2.5-flash',
-    'gemini-3.7-flash',
-    'gemini-flash-latest',
-    'gemini-3.1-flash-lite',
-  ];
-  let lastError: any = null;
+  // 1. Try native Google Search Grounding on Gemini models
+  const nativeGroundingModels = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
 
-  for (const model of modelsToTry) {
+  for (const model of nativeGroundingModels) {
     try {
       const response = await client.models.generateContent({
         model,
@@ -143,9 +191,49 @@ async function generateGroundedResponse(
         };
       }
     } catch (err: any) {
-      console.warn(`[Gemini API] Model ${model} with Google Search Grounding encountered an issue, trying next in cascade:`, err?.message || err);
+      console.warn(`[Gemini API] Native search grounding on ${model} returned:`, err?.status || err?.message || err);
+      // If 429 quota or 404, continue to live search fallback
+    }
+  }
+
+  // 2. High-Reliability Live Web Search Grounding Fallback:
+  // Performs live real-time web search, synthesizes verified snippets & source links into the Gemini prompt
+  console.log(`[Gemini API] Activating Live Web Search Grounding for: "${userMessage.slice(0, 80)}"`);
+  const { snippets, sources } = await fetchLiveWebSearch(userMessage);
+
+  let searchAugmentedInstruction = systemInstruction;
+  if (snippets.length > 0) {
+    searchAugmentedInstruction += `\n\nREAL-TIME LIVE WEB SEARCH RESULTS FOR "${userMessage}":\n${snippets.join('\n---\n')}\n\nINSTRUCTION: Synthesize the above live search facts accurately into your friendly Spider-Man style response. If the user asks about current events, releases, or weather, use these live findings.`;
+  }
+
+  const standardModels = ['gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
+  let lastError: any = null;
+
+  for (const model of standardModels) {
+    try {
+      const response = await client.models.generateContent({
+        model,
+        contents,
+        config: {
+          systemInstruction: searchAugmentedInstruction,
+          temperature: 0.75,
+          topP: 0.95,
+        },
+      });
+
+      const text = response.text;
+      if (text && typeof text === 'string' && text.trim()) {
+        return {
+          reply: text.trim(),
+          sources,
+          searchQueries: sources.length > 0 ? [userMessage] : [],
+          source: 'gemini',
+        };
+      }
+    } catch (err: any) {
+      console.warn(`[Gemini API] Model ${model} generation attempt returned:`, err?.status || err?.message || err);
       lastError = err;
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 150));
     }
   }
 
@@ -224,8 +312,8 @@ app.post('/api/chat', async (req, res) => {
       finalSystemInstruction += `\n\nCURRENT USER STATS & PROGRESS ON THE SITE:\n${JSON.stringify(userStats, null, 2)}`;
     }
 
-    // 4. Generate real AI response with live Google Search Grounding
-    const result = await generateGroundedResponse(contents, finalSystemInstruction);
+    // 4. Generate real AI response with live Search Grounding
+    const result = await generateGroundedResponse(contents, finalSystemInstruction, trimmedMessage);
 
     return res.json(result);
   } catch (err: any) {
