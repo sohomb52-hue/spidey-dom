@@ -1,6 +1,7 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
@@ -220,23 +221,39 @@ app.post('/api/chat', async (req, res) => {
 
 // Vite Middleware for development & Static file serving for production
 async function startServer() {
+  const distPath = path.resolve(__dirname, 'dist');
+  const indexPath = path.resolve(distPath, 'index.html');
+  const hasDist = fs.existsSync(indexPath);
   const isProd = process.env.NODE_ENV === 'production';
 
-  if (!isProd) {
+  if (isProd && hasDist) {
+    console.log(`📦 Serving production static build from: ${distPath}`);
+    app.use(express.static(distPath));
+    app.get('*', (_req, res) => {
+      res.sendFile(indexPath);
+    });
+  } else {
+    // If not in production OR if dist was not built (e.g. Render build command omitted npm run build),
+    // mount Vite middleware dynamically so the app always renders without crashing with ENOENT!
+    if (isProd) {
+      console.warn(
+        '⚠️ Warning: dist/index.html was not found in production mode. ' +
+        'Mounting Vite middleware dynamically to serve the app on the fly. ' +
+        'To optimize for production on Render, set Build Command to: "npm install && npm run build".'
+      );
+    } else {
+      console.log('🚀 Running in development mode with Vite middleware...');
+    }
+
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
-  } else {
-    app.use(express.static(path.resolve(__dirname, 'dist')));
-    app.get('*', (_req, res) => {
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
-    });
   }
 
   app.listen(PORT, () => {
-    console.log(`🕷️ Spider-Verse Fact Attack server running on http://localhost:${PORT}`);
+    console.log(`🕷️ Spider-Verse Fact Attack server running on port ${PORT}`);
   });
 }
 
