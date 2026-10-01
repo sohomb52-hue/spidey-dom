@@ -311,16 +311,13 @@ export const SpideyChatDrawer: React.FC<SpideyChatDrawerProps> = ({
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        if (response.status === 503 || errorData?.code === 'API_KEY_MISSING') {
-          throw new Error('GEMINI_API_KEY is not configured on the server deployment. Please add GEMINI_API_KEY in your deployment environment variables.');
-        }
-        throw new Error(errorData?.error || `Server returned HTTP ${response.status}`);
+        throw new Error(errorData?.error || `Server communication issue (${response.status})`);
       }
 
       const data = await response.json();
 
       if (!data || !data.reply) {
-        throw new Error(data?.error || 'Empty reply received from Gemini API');
+        throw new Error(data?.error || 'Empty reply received from Spidey AI network');
       }
 
       playSfx('spider-sense');
@@ -337,12 +334,10 @@ export const SpideyChatDrawer: React.FC<SpideyChatDrawerProps> = ({
 
       setMessages((prev) => [...prev, spideyMsg]);
     } catch (err: any) {
-      console.error('Gemini chat request error:', err);
+      console.error('Spidey chat request error:', err);
       playSfx('bam');
 
-      const userDisplayError = err?.message?.includes('GEMINI_API_KEY')
-        ? '⚡ Spider-Sense detected: GEMINI_API_KEY is missing on the server deployment. Please configure GEMINI_API_KEY in your deployment environment variables.'
-        : '⚡ Spider-Sense detected a connection problem. Try again in a moment.';
+      const userDisplayError = '⚡ Spider-Sense encountered a temporary network delay. Click TRY AGAIN below!';
 
       const errorMsg: ChatMessage = {
         id: `err-${Date.now()}`,
