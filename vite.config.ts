@@ -25,6 +25,9 @@ export default defineConfig(() => {
               if (id.includes('react') || id.includes('react-dom')) {
                 return 'vendor-react';
               }
+              if (id.includes('@sentry')) {
+                return 'vendor-sentry';
+              }
               if (id.includes('firebase')) {
                 return 'vendor-firebase';
               }
