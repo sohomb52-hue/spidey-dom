@@ -14,6 +14,29 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      target: 'esnext',
+      cssCodeSplit: true,
+      chunkSizeWarningLimit: 1200,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('react') || id.includes('react-dom')) {
+                return 'vendor-react';
+              }
+              if (id.includes('firebase')) {
+                return 'vendor-firebase';
+              }
+              if (id.includes('motion') || id.includes('lucide-react')) {
+                return 'vendor-ui';
+              }
+              return 'vendor-common';
+            }
+          },
+        },
+      },
+    },
     server: {
       // Allow all deployment hosts (Render, Cloud Run, custom domains, etc.)
       allowedHosts: true as const,

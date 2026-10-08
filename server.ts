@@ -1,5 +1,4 @@
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -25,8 +24,19 @@ app.use((_req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true }));
+// Memory-efficient request parsing (prevents buffer bloat on constrained 512MB hosts like Render)
+app.use(express.json({ limit: '512kb' }));
+app.use(express.urlencoded({ extended: true, limit: '512kb' }));
+
+// Lightweight health check endpoint for Render zero-downtime monitoring
+app.get(['/healthz', '/api/healthz'], (_req, res) => {
+  const memoryUsage = process.memoryUsage();
+  res.status(200).json({
+    status: 'ok',
+    uptime: Math.floor(process.uptime()),
+    memoryMB: Math.round(memoryUsage.rss / 1024 / 1024),
+  });
+});
 
 // Safe default key decoding to prevent GitHub Push Protection / Secret Scanner rejection while enabling zero-config deployment on Render
 const DEFAULT_FALLBACK_API_KEY = Buffer.from('QVEuQWI4Uk42THZWWnlwV2xQZzFnTnRDaUw0cnotRUhfa3VvZUpBOGtCNlRTbU9rYkM4ZXc=', 'base64').toString('utf-8');
@@ -86,11 +96,15 @@ export interface GeminiChatResponse {
 async function fetchLiveWebSearch(query: string): Promise<{ snippets: string[]; sources: GroundingSource[] }> {
   try {
     const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4500);
+
     const res = await fetch(url, {
+      signal: controller.signal,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       },
-    });
+    }).finally(() => clearTimeout(timeoutId));
 
     if (!res.ok) {
       return { snippets: [], sources: [] };
@@ -211,8 +225,8 @@ async function generateGroundedResponse(
           source: 'gemini',
         };
       }
-    } catch (err: any) {
-      // If 429 quota or 404, smoothly proceed to high-reliability live search fallback
+    } catch {
+      // Smoothly proceed to high-reliability live search fallback
     }
   }
 
@@ -249,15 +263,12 @@ async function generateGroundedResponse(
           source: 'gemini',
         };
       }
-    } catch (err: any) {
-      console.warn(`[Gemini API] Model ${model} generation attempt returned:`, err?.status || err?.message || err);
-      await new Promise((r) => setTimeout(r, 100));
+    } catch {
+      await new Promise((r) => setTimeout(r, 80));
     }
   }
 
-  // 3. Complete Autonomous Fallback: If all external Gemini calls fail or encounter transient outage,
-  // return synthesized live web results so the user ALWAYS gets a reply on Render!
-  console.log(`[Gemini API] Returning synthesized live search response for "${userMessage}"`);
+  // 3. Complete Autonomous Fallback: If all external Gemini calls fail, return synthesized live web results
   return synthesizeSpideyResponse(userMessage, snippets, sources);
 }
 
@@ -324,13 +335,12 @@ app.post('/api/chat', async (req, res) => {
       finalSystemInstruction += `\n\nCURRENT USER STATS & PROGRESS ON THE SITE:\n${JSON.stringify(userStats, null, 2)}`;
     }
 
-    // 4. Generate real AI response with live Search Grounding (Zero 503s on Render)
+    // 4. Generate real AI response with live Search Grounding
     const result = await generateGroundedResponse(contents, finalSystemInstruction, trimmedMessage);
 
     return res.json(result);
   } catch (err: any) {
     console.error('[Spidey API] Error in /api/chat:', err);
-    // Never fail with 503 on Render: fallback gracefully
     const fallbackMessage = req.body?.message || 'Spider-Man';
     return res.json({
       reply: `Hey True Believer! My Spider-Sense is buzzing, but I'm right here with you! You asked about "${fallbackMessage}". What specific comic, movie, or multiverse question can I help you with next?`,
@@ -341,30 +351,29 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// Vite Middleware for development & Static file serving for production
+// Production Static Serving vs Development Dynamic Vite Middleware
 async function startServer() {
   const distPath = path.resolve(__dirname, 'dist');
   const indexPath = path.resolve(distPath, 'index.html');
   const hasDist = fs.existsSync(indexPath);
-  const isProd = process.env.NODE_ENV === 'production';
 
-  if (isProd && hasDist) {
-    console.log(`📦 Serving production static build from: ${distPath}`);
-    app.use(express.static(distPath));
+  // If built dist files exist (production build from Render), ALWAYS serve statically with zero Vite overhead!
+  if (hasDist) {
+    console.log(`📦 Serving production static build from: ${distPath} (Memory Optimized)`);
+    // Serve static files with proper caching headers
+    app.use(express.static(distPath, {
+      maxAge: '1d',
+      etag: true,
+      index: false,
+    }));
+
     app.get('*', (_req, res) => {
       res.sendFile(indexPath);
     });
   } else {
-    if (isProd) {
-      console.warn(
-        '⚠️ Warning: dist/index.html was not found in production mode. ' +
-        'Mounting Vite middleware dynamically to serve the app on the fly. ' +
-        'To optimize for production on Render, set Build Command to: "npm install && npm run build".'
-      );
-    } else {
-      console.log('🚀 Running in development mode with Vite middleware...');
-    }
-
+    // Only in local development when dist is missing: dynamically import Vite to keep production heap small
+    console.log('🚀 Development mode: Loading Vite middleware dynamically...');
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
@@ -376,7 +385,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🕷️ Spider-Verse Fact Attack server running on port ${PORT}`);
+    console.log(`🕷️ Spider-Verse Fact Attack server running on port ${PORT} [PID: ${process.pid}]`);
   });
 }
 
